@@ -84,7 +84,7 @@ npm run typecheck  # tsc --noEmit
   `other`, dated 近现代/当代; their lines are searchable.
 - **Step 4** ✅ real galaxy: `three/Galaxy` (procedural core+disk+dome), `three/PoetStars`
   (29k real poets, dynasty disk, hover/click-pick), `three/FlyControls` (slow 6-DOF + speed
-  HUD + fly-to + raycast poet/void), `ui/SearchPanel` (author search→fly), `ui/PoetPanel`
+  HUD + fly-to + **O(1) GPU colour-ID pick** poet/void, `three/gpuPick.ts`), `ui/SearchPanel` (author search→fly), `ui/PoetPanel`
   (real poems + indices), `ui/DynastyLegend` (filter). Default = random; 格律 dummy/gated.
   See [FRONTEND_GUIDE.md](FRONTEND_GUIDE.md).
 - **Step 5** ✅ three more features SHIPPED (44/44 tests, verified in-browser):
@@ -116,8 +116,14 @@ npm run typecheck  # tsc --noEmit
   256 shards, ~791 MB, git-ignored, renamed from `firstline/`; 疑是地上霜→李白《静夜思》 now resolves);
   **赠诗 recall** boosted to **4,849 edges** via a ~250-entry 字号 alias table (~120 poets:
   少陵→杜甫, 子瞻→苏轼, 香山→白居易…) in `build-data.mjs::GIFT_ALIAS`.
-- **Next** ⏳ deploy (static + brotli); GPU-pick at scale; per-poet poem fetch; thicker 赠诗 lines
-  (Line2); 无名氏 collapse; modern-poet dynasty refinement (date table).
+- **Step 7** ✅ SHIPPED (53/53 tests — 47 engine + 6 GPU-pick — + build + e2e DOM on a real GPU):
+  **O(1) GPU colour-ID picking** (`three/gpuPick.ts` — poet index → `aPickColor` attribute → offscreen
+  n×n window read at the cursor → decode; replaced the O(29,808)/hover CPU scan in `FlyControls`;
+  brightness-independent → unblocks true fusion); **per-poet HTTP Range fetch** (`pipeline/build-data.mjs`
+  writes a byte-offset sidecar `poems/{b}.idx.json`; `load.ts::loadPoetPoems` Range-fetches one poet's
+  slice, whole-bucket fallback); deleted the orphan `anyTextReverse`; memoized `PoetPanel`'s index column.
+- **Next** ⏳ true visual fusion (brighten decoration — real GPU); deploy (static + brotli, host honours
+  byte ranges); thicker 赠诗 lines (Line2); 无名氏 collapse; modern-poet dynasty refinement (date table).
 
 > Legacy `three/StarField.tsx` + `three/Landmarks.tsx` are the Step-4a placeholder field,
 > superseded by `PoetStars`/`Galaxy` — kept for reference, not mounted.

@@ -18,7 +18,8 @@ The app loads these static assets, builds a `PoetryDataset`, and calls
 | `gifts.json` | initial | ~126 KB | `GiftsAsset` | 赠诗 edges `[fromId,toId,w]` (4,849); **tracked** (small) |
 | `dynasties.json` | initial | <1 KB | (see DYNASTIES) | optional; mirrors `src/data/dynasties.ts` |
 | `stars/{shard}.json` | lazy/region | ~20–60 KB ea | `StarShard` | histograms + sample refs |
-| `poems/{shard}.json` | lazy/poet | ~20–60 KB ea | `PoemShard` | real poem text (git-ignored, ~235 MB) |
+| `poems/{shard}.json` | lazy/poet | ~0.9 MB ea | `PoemShard` | real poem text, ONE valid JSON object (git-ignored, ~235 MB). Fetched by HTTP **Range** (one poet's slice), not whole |
+| `poems/{shard}.idx.json` | lazy/poet | ~2–4 KB ea | `Record<id,[off,len]>` | byte-offset sidecar → the Range slice for each poet's value; built in the same pass (git-ignored) |
 | `lines/{shard}.json` | lazy/search | ~20–60 KB ea | `FirstLineShard` | **every** line → poem refs; 256 buckets by `fnv32(line)&0xff` (git-ignored, ~791 MB) |
 
 **Content-search bucketing invariant:** the pipeline now indexes **every** line (not just openings),
@@ -31,8 +32,17 @@ first line. The pipeline's `lineBucket(s) = (fnv32(s)&0xff)` and the frontend's
 be **same-dynasty** (precision), while a curated 号/字 **alias** (晦庵→朱熹…) may resolve a famous
 reference across dynasties (the ~9% cross-dynasty edges = genuine homage, e.g. a 清人 和东坡).
 
-**First-paint budget ≤ 1.3 MB brotli.** Per-poet poem shards (~60–90 MB total) load only on
-focus. Star x/y/z are **computed client-side** from poet `id` + dynasty shell (zero asset
+**Per-poet Range fetch (egress).** Clicking a poet would otherwise download its whole ~0.9 MB
+`poems/{bucket}.json` to read a few KB. Instead `pipeline/build-data.mjs` writes each bucket as ONE
+valid JSON object PLUS a byte-offset sidecar `poems/{bucket}.idx.json` = `{id:[off,len]}` (the value
+at `[off, off+len)` is itself a valid `PoemRecord[]`). `load.ts::loadPoetPoems` issues an HTTP
+`Range: bytes=off-(off+len-1)` and `JSON.parse`s the slice (status **206**). `manifest.poemSidecar`
+gates the attempt; the whole file stays valid JSON so a host that ignores Range (returns **200**) or
+old data without the sidecar transparently falls back to the whole bucket. Hosts must honour byte
+ranges on `poems/*.json` (nginx + most static CDNs + vite dev all do).
+
+**First-paint budget ≤ 1.3 MB brotli.** Per-poet poem slices load only on focus (a few KB each via
+Range). Star x/y/z are **computed client-side** from poet `id` + dynasty shell (zero asset
 bytes) — see `src/data/dynasties.ts` (`bandRadius`, `hashStr`, `spherePoint`).
 
 **Indices are never shipped.** A poem's Babel/格律 index is computed in-browser on demand

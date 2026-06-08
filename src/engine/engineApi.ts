@@ -375,32 +375,6 @@ export function anyTextIndex(lines: string[]): AnyIndex | null {
   return { index: s, digits: s.length, chars, lines: lines.length };
 }
 
-// Reverse a 任意长编号 → the exact poem (chars + line structure). Any positive integer maps to
-// a poem (the catalog is ALL finite poems), so there is no "out of range".
-export function anyTextReverse(indexInput: string): { lines: string[]; index: string; digits: number } | null {
-  const digitsOnly = (indexInput || "").replace(/[^0-9]/g, "");
-  if (!digitsOnly) return null;
-  let b: bigint;
-  try {
-    b = BigInt(digitsOnly);
-  } catch {
-    return null;
-  }
-  const { charset, lexicon } = getDataset();
-  const N = lexicon.N;
-  const lines: string[] = [];
-  let cur = "";
-  for (const s of anyUnrank(N, b)) {
-    if (s === N) {
-      lines.push(cur);
-      cur = "";
-    } else cur += charset[s];
-  }
-  lines.push(cur);
-  const idx = b.toString();
-  return { lines, index: idx, digits: idx.length };
-}
-
 // Rebuild a full PulledPoem from a known index (for permalink restore). Places it at the
 // canonical scattered point so a shared link drops you onto the same star.
 export function pulledFromIndex(formId: PullForm, indexStr: string): PulledPoem | null {

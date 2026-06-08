@@ -29,12 +29,16 @@ export interface DataManifest {
   poemCount: number;
   buckets: string[];
   dynCounts: Record<string, number>;
+  poemSidecar?: boolean; // poems/{bucket}.idx.json byte-offset sidecars exist → Range-fetch per poet
 }
 
 let _poets: PoetRow[] = [];
 let _byId = new Map<string, PoetRow>();
 let _manifest: DataManifest | null = null;
-const _bucketCache = new Map<string, Record<string, PoemRecord[]>>();
+const _bucketCache = new Map<string, Record<string, PoemRecord[]>>(); // whole-bucket fallback cache
+const _poemCache = new Map<string, PoemRecord[]>(); // per-poet cache (Range path returns one record)
+const _idxCache = new Map<string, Record<string, [number, number]> | null>(); // bucket byte-offset sidecar
+let _rangeUnsupported = false; // a host that ignores Range (200, not 206) → stop attempting it
 
 export const getPoets = (): PoetRow[] => _poets;
 export const getPoet = (id: string): PoetRow | undefined => _byId.get(id);
@@ -90,14 +94,73 @@ export async function loadData(base = "/data"): Promise<DataManifest> {
   return manifest;
 }
 
-export async function loadPoetPoems(id: string, base = "/data"): Promise<PoemRecord[]> {
-  const bucket = id.slice(0, 2);
+async function loadBucketWhole(bucket: string, base: string): Promise<Record<string, PoemRecord[]>> {
   let obj = _bucketCache.get(bucket);
   if (!obj) {
-    obj = await fetch(`${base}/poems/${bucket}.json`).then((r) => r.json());
+    obj = await fetch(`${base}/poems/${bucket}.json`)
+      .then((r) => (r.ok ? r.json() : {}))
+      .catch(() => ({}));
     _bucketCache.set(bucket, obj!);
   }
-  return obj![id] || [];
+  return obj!;
+}
+
+// Egress saver (#12): a poet's poems are a few KB, but a bucket is ~0.9 MB. With the byte-offset
+// sidecar (poems/{bucket}.idx.json), fetch ONLY this poet's slice via an HTTP Range request. The
+// .json stays one valid JSON object, so we transparently fall back to the whole bucket when the
+// sidecar is absent (old data) or the host ignores Range (returns 200 instead of 206).
+export async function loadPoetPoems(id: string, base = "/data"): Promise<PoemRecord[]> {
+  const cached = _poemCache.get(id);
+  if (cached) return cached;
+  const bucket = id.slice(0, 2);
+
+  if (_manifest?.poemSidecar && !_rangeUnsupported) {
+    let idx = _idxCache.get(bucket);
+    if (idx === undefined) {
+      const fetched: Record<string, [number, number]> | null = await fetch(`${base}/poems/${bucket}.idx.json`)
+        .then((r) => (r.ok ? r.json() : null))
+        .catch(() => null);
+      _idxCache.set(bucket, fetched);
+      idx = fetched;
+    }
+    const ent = idx?.[id];
+    if (ent) {
+      const [off, len] = ent;
+      try {
+        const res = await fetch(`${base}/poems/${bucket}.json`, {
+          headers: { Range: `bytes=${off}-${off + len - 1}` },
+        });
+        if (res.status === 206) {
+          const txt = await res.text();
+          try {
+            const poems = JSON.parse(txt) as PoemRecord[]; // the slice IS valid JSON
+            _poemCache.set(id, poems);
+            return poems;
+          } catch {
+            // 206 but the bytes don't parse — e.g. the host serves Range over a gzip stream, so the
+            // offsets (computed on the uncompressed file) are meaningless. Stop trying Range and use
+            // the whole (transparently-decompressed) bucket from here on.
+            _rangeUnsupported = true;
+          }
+        } else if (res.ok) {
+          // host ignored Range → it sent the whole bucket; use it + stop trying Range from now on.
+          _rangeUnsupported = true;
+          const obj = JSON.parse(await res.text()) as Record<string, PoemRecord[]>;
+          _bucketCache.set(bucket, obj);
+          const poems = obj[id] || [];
+          _poemCache.set(id, poems);
+          return poems;
+        }
+      } catch {
+        /* transient network hiccup → fall back to the whole bucket below (don't latch off Range) */
+      }
+    }
+  }
+
+  const obj = await loadBucketWhole(bucket, base);
+  const poems = obj[id] || [];
+  _poemCache.set(id, poems);
+  return poems;
 }
 
 // Author search: substring match on name, ranked by poemCount, capped.

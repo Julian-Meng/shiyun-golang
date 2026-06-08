@@ -195,8 +195,34 @@ for (const p of poets.values()) {
 // SKIP_HEAVY=1 reuses already-generated poems/+firstline/ (231+75 MB) to iterate fast on
 // the lightweight gifts.json / manifest only.
 const SKIP_HEAVY = !!process.env.SKIP_HEAVY;
-if (!SKIP_HEAVY)
-  for (const [b, obj] of buckets) writeFileSync(join(OUT, "poems", `${b}.json`), JSON.stringify(obj));
+
+// Write a poems bucket as ONE valid JSON object (so the whole-file fetch still works as a
+// fallback) PLUS a byte-offset sidecar `{id:[off,len]}` so the frontend can HTTP **Range**-fetch
+// just one poet's record (a few KB) instead of the whole ~0.9 MB bucket (egress saving, #12).
+// `off`/`len` are BYTE offsets into the .json file; the sliced bytes [off, off+len) are exactly
+// the poet's JSON value (`[{t,f,p},…]`), itself valid JSON — so the client JSON.parses the slice
+// directly. body + idx are built in ONE pass so the offsets always match the bytes we write,
+// regardless of V8's object-key ordering.
+function writeBucket(b, obj) {
+  const idx = {};
+  let body = "{";
+  let off = Buffer.byteLength(body, "utf8"); // bytes before the first key (= 1, the "{")
+  let first = true;
+  for (const id in obj) {
+    const keyPart = (first ? "" : ",") + JSON.stringify(id) + ":";
+    const val = JSON.stringify(obj[id]);
+    const keyBytes = Buffer.byteLength(keyPart, "utf8");
+    const valBytes = Buffer.byteLength(val, "utf8");
+    idx[id] = [off + keyBytes, valBytes]; // byte offset + length of the VALUE (the poems array)
+    body += keyPart + val;
+    off += keyBytes + valBytes;
+    first = false;
+  }
+  body += "}";
+  writeFileSync(join(OUT, "poems", `${b}.json`), body);
+  writeFileSync(join(OUT, "poems", `${b}.idx.json`), JSON.stringify(idx));
+}
+if (!SKIP_HEAVY) for (const [b, obj] of buckets) writeBucket(b, obj);
 
 // ── content search index: lines/{2-hex content bucket}.json -> {line: [refs]} (ANY line) ──
 mkdirSync(join(OUT, "lines"), { recursive: true });
@@ -389,10 +415,11 @@ const dynCounts = {};
 for (const p of poets.values()) dynCounts[p.dynasty] = (dynCounts[p.dynasty] || 0) + 1;
 
 writeFileSync(join(OUT, "manifest.json"), JSON.stringify({
-  version: 2, n: N, poetCount: poets.size, poemCount: total,
+  version: 3, n: N, poetCount: poets.size, poemCount: total,
   buckets: [...buckets.keys()].sort(),
   lineBuckets: [...flBuckets.keys()].sort(),
   giftEdges: edges.length,
+  poemSidecar: !SKIP_HEAVY, // poems/{b}.idx.json byte-offset sidecars exist → frontend Range-fetches
   dynCounts,
 }));
 console.log(`\n诗句索引 lines=${lineIndex.size} buckets=${flBuckets.size}  赠诗 edges=${edges.length}`);

@@ -38,7 +38,7 @@ bundle at `C:\Users\Cohen\Desktop\shiyun-ALL-branches-backup.bundle` (restore: `
 ```bash
 npm install
 npm run dev        # vite → http://localhost:5173
-npm test           # vitest: 47 engine round-trip tests (must stay green)
+npm test           # vitest: 53 tests (47 engine round-trip + 6 GPU-pick) — must stay green
 npm run build      # tsc --noEmit && vite build  (the real verify gate)
 npm run typecheck
 ```
@@ -64,7 +64,8 @@ thing that breaks the hosting model; all index math + render is client-side).
 | **Permalinks** | Address bar stays shareable: `#a=<poetId>` / `#p=<form>.<index>` (`state/permalink.ts`); 🔗 分享 buttons; restore on load. |
 | **Product-grade UI** | Elegant 楷/宋 serif (`--serif`) for poem text; gradient cards + gold accent rules. |
 | **诗句 content search** | ANY line (not just openings) — `疑是地上霜 → 静夜思` — via an all-lines inverted index (`lines/`, 256 shards). |
-| **Interaction** | 6-DOF fly cam + speed HUD; **screen-space + brightness-gated pick** (click a bright star → poet; click void → random poem); names only on hover/select. |
+| **Interaction** | 6-DOF fly cam + speed HUD; **O(1) GPU colour-ID pick** (`three/gpuPick.ts` — poet index → offscreen buffer, read the cursor pixel; replaced the old O(29,808)/hover CPU scan): click a star → poet, click void → random poem; names only on hover/select. |
+| **Per-poet egress (#12)** | Clicking a poet HTTP **Range**-fetches just that poet's slice of its `poems/{bucket}.json` (a few KB) via the byte-offset sidecar `poems/{bucket}.idx.json`, not the whole ~0.9 MB bucket. Whole-file stays valid JSON → transparent fallback when the sidecar is absent or the host ignores Range (200 not 206). `load.ts::loadPoetPoems`. |
 | **Search** | Author search → fly-to → poet's real poems + each poem's 全集编号. |
 | **Filters compose** | 诗体 × **常用字** (top-2500 freq chars, avoids 生僻乱码) × **格律**. e.g. 格律+常用字 → "思伦要锁馆/窟置右黎刍/肆昧家谐变/霜辉化铁驹" (valid + readable). |
 | **Dynasty filter** | 15-dynasty legend (先秦→当代) + presets (全部/主要/唐宋). |
@@ -131,7 +132,31 @@ node pipeline/build-lexicon.mjs                            # lexicon.json (needs
 
 ## 6. Remaining work (next, roughly in priority)
 
-**DONE — 自由-merge / gravity-differential session (latest; verified: build + 47/47 + e2e DOM):**
+**DONE — GPU-pick + Range-fetch session (latest; verified: build + 53/53 + e2e DOM on a real GPU):**
+- ✅ **GPU colour-ID picking (#0, top priority)** — `three/gpuPick.ts`. Each poet's index is colour-encoded
+  into an `aPickColor` vertex attribute (shared on the PoetStars geometry, so the dynasty-filter aSize
+  writes exclude hidden poets from picks for free). On a hover/click the picker renders ONLY an n×n window
+  of the poet field around the cursor (`camera.setViewOffset`) into a tiny offscreen RT, reads the pixels
+  back, and decodes the nearest-to-centre non-background pixel → the poet in **O(1)**. Replaced the
+  O(29,808)/hover CPU scan + apparent-size heuristic in `FlyControls.screenPick` (now a one-liner calling
+  `pickTargets.pick`). A vertex-shader gate (`sz < uGate`, == the old apparent≥2.2 CSS-px gate) keeps the
+  void between stars pull-able; depthTest keeps the front-most star per pixel. **Clickability is now
+  decoupled from brightness**, so the decoration can be brightened toward true fusion without breaking
+  clicks (the next visual step — see below). Pure helpers (`encodePickColor`/`nearestPoetIndex`) have 6
+  vitest cases; a DEV-only `window.__shiyunPickTest(i)` round-trips a projected poet through the GPU path
+  (verified 10/10 on a real GPU: 陆游/王世贞/屈大均/刘克庄…).
+- ✅ **Per-poet Range fetch (#12, egress)** — `pipeline/build-data.mjs` now writes each `poems/{bucket}.json`
+  as ONE valid JSON object PLUS a byte-offset sidecar `poems/{bucket}.idx.json` (`{id:[off,len]}`, built in
+  the same pass so offsets always match the bytes). `load.ts::loadPoetPoems` HTTP **Range**-fetches just the
+  poet's slice (the slice is itself valid JSON → `JSON.parse` directly), caching per-poet. Falls back to the
+  whole bucket when the sidecar is absent (old data) or the host returns 200 not 206. `manifest.poemSidecar`
+  gates the attempt. Verified on the vite dev server: `206`, `content-range: bytes 72297-1230612/2068787`
+  for 苏轼, slice parsed to all 3596 poems (≈44–99% egress saved depending on the poet's share of its bucket).
+- ✅ **Cleanups** — deleted the orphan `engineApi.anyTextReverse` (编号反查·自由 uses `pullByIndex("ziyou",…)`);
+  `PoetPanel` now memoizes its rows + the (large-BigInt) 全集/自由编号 in a `useMemo` keyed on `[poems, focus]`
+  so a long-新诗 `anyTextIndex` (O(n²) rank) runs once per poet load, not every render.
+
+**DONE — 自由-merge / gravity-differential session (verified: build + 47/47 + e2e DOM):**
 - ✅ **自由 ≡ ONE arbitrary-length catalog** — merged the former fixed-28 自由 AND 任意长 into a
   single bijective base-(N+1) catalog over (字库 ∪ line-break) (`engine.anyRank/anyUnrank`). It now
   backs 自由 generation (词-like via M+W sampling, breaks collapsed to the unified break so it
@@ -158,8 +183,9 @@ node pipeline/build-lexicon.mjs                            # lexicon.json (needs
   stay clickable. `store.gravity`, HUD 引力, `FlyControls`. Outside → watch it turn.
 - ✅ **任意长编号** — `engine.anyRank/anyUnrank`: a bijective base-(N+1) numeration over (字库 ∪
   {line-break}) gives EVERY variable-length poem (新诗/古体) a reversible 全集编号 (they had none).
-  `engineApi.anyTextIndex`/`anyTextReverse`; PoetPanel shows a 诗云编号 for `other` poems; 编号反查
-  has a **任意长** mode. +3 tests.
+  `engineApi.anyTextIndex` (reverse via `pullByIndex("ziyou",…)`); PoetPanel shows a 诗云编号 for `other`
+  poems; 编号反查 has a **任意长/自由** mode. +3 tests. *(The standalone `anyTextReverse` was later deleted
+  as an orphan — `pullByIndex` covers reverse.)*
 - ✅ **Long lines wrap** — 自由/词/任意长 poems wrap (`.poem-line.wrap`) instead of clipping.
 
 **DONE — rotation-merge + locate session (verified: build + 44/44 + DOM):**
@@ -218,29 +244,32 @@ node pipeline/build-lexicon.mjs                            # lexicon.json (needs
     4,849 赠诗 edges (少陵→杜甫, 子瞻→苏轼, 香山→白居易…).
 
 **Still TODO (recommended order for the NEXT agent):**
-0. **GPU picking — top priority** (unblocks two asks at once): `screenPick` is still an
-   O(29,808)/hover CPU loop, AND "complete star fusion" is currently faked by dimming the
-   decoration. Render poet IDs to an offscreen buffer (color-encode index) and read back the pixel
-   under the cursor → picking is O(1) and poets can sit in the SAME draw as the decoration while
-   staying individually clickable = true fusion. Replaces the apparent-size heuristic in
-   `FlyControls.screenPick` + the brightness juggling in `Galaxy`/`PoetStars`.
-12. **per-poet poem fetch (egress)** — clicking a poet still downloads its whole `poems/{bucket}.json`
-    (~0.9 MB) to read a few KB. *Deliberately deferred this session* (it risks the just-restored
-    loading + needs pipeline work). Recommended design, no backend: have `build-data.mjs` write each
-    bucket as concatenated poet-records + a sidecar `{poetId:[offset,len]}` index, and make
-    `load.ts::loadPoetPoems` issue an HTTP **Range** request for just that slice (static hosts/nginx
-    + vite dev all support Range). Avoid one-file-per-poet (29,808 tiny files).
-13. **Deploy** — static build → `shiyun.<domain>` subdomain, nginx `brotli_static`, precompress
-    assets. See DATA_CONTRACT.md §deploy notes. No backend.
-14. **Polish** — GPU-pick at scale (the `screenPick` loop is still O(29,808)/hover, now with cos/sin
-    hoisted but no spatial index); thicker 赠诗 lines (`Line2`/`meshline` — current arcs are 1px,
-    WebGL `lineWidth` cap); 无名氏 collapse; modern-poet **dynasty refinement** (date table to split
-    近现代/当代 more finely than 民国-only).
-15. **True round-trip void coords** — `pullAt` (click→`indexFromPoint`) and the locate/permalink map
+1. **True visual fusion (now UNBLOCKED by GPU picking)** — picking no longer depends on poets being the
+   brightest discrete points, so the decoration brightness-juggling in `Galaxy`/`PoetStars` (DUST 120k /
+   dim STARS 9k / poets ×2.3) can be rebalanced so poets sit in / among the decoration and the cloud reads
+   as one continuous field. *Must be tuned on a real GPU* (headless can't screenshot the additive galaxy).
+   Optional next step: draw poets in the SAME pass as the decoration (the pick buffer keeps them clickable).
+   Start by raising `Galaxy` STARS/brightness and lowering the poet `×2.3` until the seam disappears.
+2. **Deploy** — static build → `shiyun.<domain>` subdomain, nginx `brotli_static`, precompress assets.
+   See DATA_CONTRACT.md §deploy notes. **Range matters here**: the per-poet fetch needs the host to honour
+   byte ranges on `poems/*.json` (nginx/most static CDNs do; `brotli_static` serving a `.br` still supports
+   ranges on the precompressed file). No backend.
+3. **Polish** — thicker 赠诗 lines (`Line2`/`meshline` — current arcs are 1px, WebGL `lineWidth` cap);
+   无名氏 collapse; modern-poet **dynasty refinement** (date table to split 近现代/当代 more finely than
+   民国-only); pre-compute the per-bucket `poems/*.idx.json` into a single sidecar if 256 tiny fetches add up.
+4. **True round-trip void coords** — `pullAt` (click→`indexFromPoint`) and the locate/permalink map
     (`pointForBabelIndex`) are NOT inverses, so clicking a located poem's exact spot won't reproduce
     it. A clean bijection over continuous space ↔ a 10⁸²-index catalog is impossible at float
     precision; either accept it (clicks = local noise sampling; locate = the canonical address) or
     document it in-UI. Not a bug — a design choice to make explicit.
+
+### Residual watch items (low priority)
+- **装饰差速莫尔条纹** — the backdrop turns FASTER than the poet layer (`DECOR_RATE 0.019` vs
+  `SPIN_RATE 0.012`, `galaxyParams.ts`). It's a deliberate "still spinning" cue and reads as nebula flow
+  because the backdrop is dim haze. If a real GPU ever shows ghosting / a second arm set, lower
+  `DECOR_RATE` toward `SPIN_RATE`. (GPU picking already keeps poets clickable regardless of this drift.)
+- **256 sidecar fetches** — the Range path fetches one `poems/{b}.idx.json` per visited bucket (cached).
+  Negligible in practice; collapse into a single index if it ever matters (see TODO 3).
 
 ### Locked decisions (don't relitigate without reason)
 - **Default = random (Babel) generation; no further self-built 平仄 research** — the 格律

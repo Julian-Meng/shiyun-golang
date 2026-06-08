@@ -13,7 +13,9 @@ loadData(base = "/data"): Promise<DataManifest>
 
 getPoets(): PoetRow[]                       // all ~29,808 poets, sorted by poemCount desc
 getPoet(id): PoetRow | undefined
-loadPoetPoems(id): Promise<PoemRecord[]>    // lazy — fetches the poet's bucket, caches it
+loadPoetPoems(id): Promise<PoemRecord[]>    // lazy — HTTP Range-fetches just this poet's slice
+                                            //   (byte-offset sidecar poems/{b}.idx.json); per-poet cache.
+                                            //   Falls back to the whole bucket if no sidecar / no 206.
 searchPoets(query, limit?): PoetRow[]       // substring name match, ranked by output
 searchByLine(query): Promise<LineHit[]>     // 诗句 search — ALL-lines index → real poems
 loadGifts(): Promise<GiftEdge[]>            // 赠诗 edges [fromId,toId,weight] (lazy, cached)
@@ -81,10 +83,10 @@ Transient camera transform lives in `FlyControls` refs, NOT the store (no 60fps 
 
 - **Pointer drag** = look; **WASD / Space / Shift** = fly; **wheel** = speed. Keys are
   ignored while an `<input>` is focused.
-- **Click (no drag)** → raycast `picking.pickTargets.poetPoints`:
-  - hit a poet (and its dynasty not hidden) → `selectPoet` + `loadPoetPoems` → `PoetPanel`.
+- **Click (no drag)** → `pickTargets.pick(x,y)` (O(1) GPU colour-ID pick, `three/gpuPick.ts`):
+  - hit a poet (its dynasty not hidden, star above the size gate) → `selectPoet` + `loadPoetPoems` → `PoetPanel`.
   - else → `pullAt(form, point)` → a random poem → `PoemPanel` + a gold marker.
-- **Hover** (throttled raycast) → `setHover(poetId)`.
+- **Hover** (throttled) → same GPU pick → `setHover(poetId)`.
 - **Search a poet** → `selectPoet` + `setFlyTarget(poetPosition(p))`.
 
 ## 6. Direction notes (locked)
@@ -97,9 +99,13 @@ Transient camera transform lives in `FlyControls` refs, NOT the store (no 60fps 
 - **Filters compose in the random library**: `commonK` (常用字 = top-K freq chars, COMMON_K=2500)
   + `lushiOnly` + form, all inside one Babel catalog. 格律 (lushiOnly) currently uses a DUMMY
   tone table; activating REAL 格律 needs the 平仄 data below.
-- **Picking**: screen-space + apparent-size gate (`FlyControls.screenPick`) — only a visibly
-  bright star under the cursor selects a poet; everything else → random void poem. Names show
-  only on hover/select (no persistent labels).
+- **Picking**: O(1) **GPU colour-ID** pick (`three/gpuPick.ts`, called via `pickTargets.pick`). The poet
+  field's indices are colour-encoded into an `aPickColor` attribute (shared with the visual geometry so the
+  dynasty filter applies); a hover/click renders an n×n window around the cursor into an offscreen buffer and
+  reads back the nearest non-background pixel → the poet, in O(1) (replaced the old O(29,808)/hover CPU scan).
+  A vertex-shader size gate (== the old apparent≥2.2 CSS-px rule) keeps the void between stars pull-able, so
+  clicking empty space still yields a random poem. **Clickability is decoupled from brightness** → the
+  decoration can be brightened toward true fusion without breaking clicks. Names show only on hover/select.
 - **Galaxy** (`three/Galaxy.tsx`, `three/galaxyParams.ts` BRANCHES/TWIST/ARM_SPREAD): a real-ish
   spiral — ~166k particles (high quality) in 3 populations: DUST + arm STARS + a dense particle
   BULGE (replaced the old hard glow-sprite → smooth core). Exponential-disk radius; value-noise
@@ -144,5 +150,6 @@ Transient camera transform lives in `FlyControls` refs, NOT the store (no 60fps 
 - **Modern 新诗** (done): yuxqiu/modern-poetry contemporary set imported (+4,494 free-verse poems /
   +508 poets — 徐志摩《再别康桥》, 海子, 北岛, 顾城, 戴望舒…). Free verse → form `"other"`; their lines
   are searchable.
-- **Still TODO**: deploy (static + brotli); GPU-pick at scale; per-poet poem fetch; thicker 赠诗
-  lines via `Line2`; 无名氏 collapse; modern-poet dynasty refinement (date table).
+- **Still TODO**: true visual fusion (brighten decoration now that picking is brightness-independent —
+  tune on a real GPU); deploy (static + brotli, host must honour byte ranges); thicker 赠诗 lines via
+  `Line2`; 无名氏 collapse; modern-poet dynasty refinement (date table).

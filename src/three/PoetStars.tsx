@@ -1,13 +1,14 @@
 import * as THREE from "three";
 import { useEffect, useMemo, useRef } from "react";
-import { useFrame } from "@react-three/fiber";
+import { useFrame, useThree } from "@react-three/fiber";
 import { Html } from "@react-three/drei";
 import { DYNASTY_BY_KEY, DYNASTIES, DYNASTY_COUNT, bandRadius, hashStr, R_MIN, R_MAX } from "../data/dynasties";
 import { getPoets, type PoetRow } from "../data/load";
 import { FAMOUS_POETS } from "../data/famousPoets";
 import { useStore } from "../state/store";
 import { pickTargets } from "./picking";
-import { GALAXY, gauss3, galaxySpin } from "./galaxyParams";
+import { createGpuPicker, encodePickColor, POET_SIZE_SCALE } from "./gpuPick";
+import { GALAXY, gauss3, galaxySpin, spinXZ } from "./galaxyParams";
 
 // Iconic poets → brighter + larger landmark stars (a sense of "明星" distinction).
 const FAMOUS = new Set(FAMOUS_POETS.map((f) => f.name));
@@ -50,6 +51,7 @@ export function PoetStars() {
   const hidden = useStore((s) => s.hidden);
   const hoverId = useStore((s) => s.hoverPoetId);
   const selId = useStore((s) => s.selectedPoet?.id ?? null);
+  const { gl, camera } = useThree();
 
   const built = useMemo(() => {
     const poets = getPoets();
@@ -59,6 +61,7 @@ export function PoetStars() {
     const size = new Float32Array(n);
     const baseSize = new Float32Array(n);
     const seed = new Float32Array(n);
+    const pick = new Float32Array(n * 3); // colour-encoded poet index → GPU picking (gpuPick.ts)
     const dynId = new Uint8Array(n);
     const tmp = new THREE.Color();
     for (let i = 0; i < n; i++) {
@@ -79,17 +82,22 @@ export function PoetStars() {
       size[i] = s;
       baseSize[i] = s;
       seed[i] = (hashStr(p.id) & 0xffff) / 0xffff;
+      const [pr, pg, pb] = encodePickColor(i);
+      pick[i * 3] = pr;
+      pick[i * 3 + 1] = pg;
+      pick[i * 3 + 2] = pb;
     }
     const g = new THREE.BufferGeometry();
     g.setAttribute("position", new THREE.BufferAttribute(pos, 3));
     g.setAttribute("aColor", new THREE.BufferAttribute(col, 3));
     g.setAttribute("aSize", new THREE.BufferAttribute(size, 1));
     g.setAttribute("aSeed", new THREE.BufferAttribute(seed, 1));
+    g.setAttribute("aPickColor", new THREE.BufferAttribute(pick, 3)); // shared with the GPU picker
     const m = new THREE.ShaderMaterial({
       transparent: true,
       depthWrite: false,
       blending: THREE.AdditiveBlending,
-      uniforms: { uTime: { value: 0 }, uSizeScale: { value: 900 } },
+      uniforms: { uTime: { value: 0 }, uSizeScale: { value: POET_SIZE_SCALE } },
       vertexShader: /* glsl */ `
         attribute vec3 aColor; attribute float aSize; attribute float aSeed;
         uniform float uTime; uniform float uSizeScale;
@@ -113,12 +121,42 @@ export function PoetStars() {
     });
     const points = new THREE.Points(g, m);
     points.frustumCulled = false;
-    pickTargets.poetPoints = points;
     pickTargets.poets = poets;
-    pickTargets.positions = pos;
-    pickTargets.sizes = baseSize;
-    return { points, baseSize, dynId, poets };
+    return { points, geometry: g, baseSize, dynId, poets };
   }, []);
+
+  // Build the GPU picker once the geometry exists, and expose it for FlyControls. It SHARES
+  // `built.geometry`, so the dynasty-filter aSize writes below also exclude hidden poets from picks.
+  useEffect(() => {
+    const picker = createGpuPicker(gl, camera, built.geometry, built.poets);
+    pickTargets.pick = (x, y) => picker.pick(x, y);
+    if (import.meta.env.DEV) {
+      // Headless round-trip self-test (no effect on the live view): project poet i to screen with a
+      // controlled camera, GPU-pick there, and confirm the SAME poet comes back — exercises the full
+      // encode → render → readback → decode path. Run from devtools: __shiyunPickTest(0).
+      (window as unknown as { __shiyunPickTest?: (i?: number) => unknown }).__shiyunPickTest = (i = 0) => {
+        const p = built.poets[i];
+        const [lx, ly, lz] = poetPosition(p);
+        const [wx, wz] = spinXZ(lx, lz); // LOCAL → WORLD (live spin) — matches the pick group rotation
+        const wpos = new THREE.Vector3(wx, ly, wz);
+        const el = gl.domElement;
+        const cam = new THREE.PerspectiveCamera(55, el.clientWidth / el.clientHeight, 0.1, 18000);
+        cam.position.copy(wpos).add(new THREE.Vector3(80, 60, 220));
+        cam.lookAt(wpos);
+        cam.updateMatrixWorld(true);
+        cam.updateProjectionMatrix();
+        const ndc = wpos.clone().project(cam); // → screen-centre
+        const cssX = (ndc.x * 0.5 + 0.5) * el.clientWidth;
+        const cssY = (-ndc.y * 0.5 + 0.5) * el.clientHeight;
+        const got = picker.pick(cssX, cssY, cam);
+        return { ok: got?.id === p.id, want: p.name, got: got?.name ?? null, gotId: got?.id ?? null, wantId: p.id };
+      };
+    }
+    return () => {
+      picker.dispose();
+      pickTargets.pick = null;
+    };
+  }, [gl, camera, built]);
 
   // dynasty filter → zero hidden poets' size
   useEffect(() => {

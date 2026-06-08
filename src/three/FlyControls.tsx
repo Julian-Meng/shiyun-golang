@@ -4,8 +4,8 @@ import { useThree, useFrame } from "@react-three/fiber";
 import { useStore } from "../state/store";
 import { pullAt, COMMON_K } from "../engine/engineApi";
 import { loadPoetPoems } from "../data/load";
-import { pickTargets, SIZE_SCALE } from "./picking";
-import { spinXZ, unspinXZ, galaxySpin, SPIN_RATE, GALAXY } from "./galaxyParams";
+import { pickTargets } from "./picking";
+import { spinXZ, unspinXZ, SPIN_RATE, GALAXY } from "./galaxyParams";
 
 const GRAVITY_R = GALAXY.RADIUS * 1.15; // inside this sphere the camera is "in the galaxy's grip"
 
@@ -30,49 +30,13 @@ export function FlyControls() {
       const r = el.getBoundingClientRect();
       return new THREE.Vector2(((x - r.left) / r.width) * 2 - 1, -((y - r.top) / r.height) * 2 + 1);
     };
-    // Screen-space pick: only a star whose on-screen glow is bright enough AND directly
-    // under the cursor counts. Dim/empty void → null (caller pulls a random poem).
-    const tmpV = new THREE.Vector3();
+    // O(1) GPU colour-ID pick (gpuPick.ts): renders the poet field's colour-encoded indices to an
+    // offscreen buffer and reads the pixel under the cursor → the poet there. Replaces the old
+    // O(29,808)/hover CPU scan + apparent-size heuristic. null = void (caller pulls a random poem);
+    // also null until PoetStars mounts the picker. Coords are converted client → canvas-relative CSS.
     const screenPick = (cx: number, cy: number) => {
-      const pos = pickTargets.positions;
-      const sizes = pickTargets.sizes;
-      const poets = pickTargets.poets;
-      if (!pos || !sizes) return null;
       const r = el.getBoundingClientRect();
-      const px = cx - r.left;
-      const py = cy - r.top;
-      const dpr = gl.getPixelRatio();
-      const hidden = st().hidden;
-      const cp = camera.position;
-      // stored positions are LOCAL; rotate into world by the current galaxy spin so picking
-      // stays aligned with the rendered (spinning) stars. Hoist cos/sin OUT of the 29k-poet
-      // loop (was a per-poet spinXZ → 29k×2 trig per hover); inline matches galaxyParams.spinXZ.
-      const ca = Math.cos(galaxySpin.angle);
-      const sa = Math.sin(galaxySpin.angle);
-      let best = -1;
-      let bestD = Infinity;
-      for (let i = 0; i < poets.length; i++) {
-        const p = poets[i];
-        if (hidden.has(p.dynasty)) continue;
-        const lx = pos[i * 3], y = pos[i * 3 + 1], lz = pos[i * 3 + 2];
-        const x = lx * ca + lz * sa;
-        const z = -lx * sa + lz * ca;
-        const dist = Math.hypot(x - cp.x, y - cp.y, z - cp.z);
-        // CSS-px glow radius, matching the shader's gl_PointSize formula
-        const apparent = (Math.min(70, Math.max(1.2, (sizes[i] * SIZE_SCALE) / dist)) * 0.5) / dpr;
-        if (apparent < 2.2) continue; // too dim to be a deliberate click target
-        tmpV.set(x, y, z).project(camera);
-        if (tmpV.z > 1) continue; // behind camera
-        const sx = (tmpV.x * 0.5 + 0.5) * r.width;
-        const sy = (-tmpV.y * 0.5 + 0.5) * r.height;
-        const dd = Math.hypot(sx - px, sy - py);
-        const tol = Math.max(apparent, 6);
-        if (dd <= tol && dd < bestD) {
-          bestD = dd;
-          best = i;
-        }
-      }
-      return best >= 0 ? poets[best] : null;
+      return pickTargets.pick?.(cx - r.left, cy - r.top) ?? null;
     };
 
     const isTyping = () => {
