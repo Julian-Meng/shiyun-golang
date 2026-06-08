@@ -1,0 +1,9 @@
+node_modules/
+dist/
+*.log
+.DS_Store
+
+# Generated poem buckets — 231 MB, regenerate with `node pipeline/build-data.mjs`.
+# (charset/poets.index/lexicon/manifest ARE tracked so the galaxy+search+格律 work in a
+#  fresh worktree; only the per-poet poem text needs regenerating.)
+public/data/poems/
