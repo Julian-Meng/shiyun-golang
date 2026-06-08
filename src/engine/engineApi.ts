@@ -291,3 +291,41 @@ export function halfIndexAuto(han: string): HalfIndex | null {
   for (const f of FORM_LIST) if (len <= f.L) return halfIndex(f.id, han);
   return null; // longer than 七律 (56) — too long to pin to a single form
 }
+
+// ── 反查 (reverse): 编号 → 诗 — the other direction of the bijection. unrank a decimal index
+//    back into the poem at that catalog position. Proves the number IS the poem (and vice-versa).
+export interface IndexPoem {
+  form: PullForm;
+  lines: string[]; // empty if out of range
+  index: string; // the normalized decimal index
+  digits: number;
+  inRange: boolean; // index < |catalog| for this form
+  cardinalityDigits: number; // length of |catalog| (so the UI can say "共 … 首")
+}
+export function pullByIndex(formId: PullForm, indexInput: string): IndexPoem | null {
+  const digitsOnly = (indexInput || "").replace(/[^0-9]/g, "");
+  if (!digitsOnly) return null;
+  let b: bigint;
+  try {
+    b = BigInt(digitsOnly);
+  } catch {
+    return null;
+  }
+  const idx = b.toString(); // normalize (drops leading zeros)
+  if (formId === "ziyou") {
+    const fullN = getDataset().lexicon.N;
+    const size = freeSize(fullN);
+    const inRange = b < size;
+    const lines = inRange
+      ? splitFree(fullN, freeUnrank(fullN, b)).map((seg) =>
+          seg.map((id) => getDataset().charset[id]).join(""),
+        )
+      : [];
+    return { form: "ziyou", lines, index: idx, digits: idx.length, inRange, cardinalityDigits: size.toString().length };
+  }
+  const form = FORMS[formId];
+  const size = babelSize(form.L, N());
+  const inRange = b < size;
+  const lines = inRange ? toLines(form, babelUnrank(form.L, N(), b)) : [];
+  return { form: formId, lines, index: idx, digits: idx.length, inRange, cardinalityDigits: size.toString().length };
+}

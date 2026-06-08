@@ -1,5 +1,6 @@
 import { useEffect } from "react";
 import { Canvas } from "@react-three/fiber";
+import { EffectComposer, Bloom } from "@react-three/postprocessing";
 import { Galaxy } from "./three/Galaxy";
 import { PoetStars } from "./three/PoetStars";
 import { GiftLines } from "./three/GiftLines";
@@ -38,6 +39,17 @@ export default function App() {
         {loaded && <GiftLines />}
         <PulledStars />
         <FlyControls />
+        {/* HDR additive bloom — turns discrete bright particles into continuous nebulosity and
+            makes the core glow fade smoothly (the single biggest "real galaxy" cue). */}
+        <EffectComposer>
+          <Bloom
+            intensity={0.85}
+            luminanceThreshold={0.12}
+            luminanceSmoothing={0.32}
+            radius={0.7}
+            mipmapBlur
+          />
+        </EffectComposer>
       </Canvas>
 
       <div className="crosshair" />

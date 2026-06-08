@@ -1,4 +1,5 @@
 import { useStore } from "../state/store";
+import { CopyButton } from "./CopyButton";
 
 const FORM_LABEL: Record<string, string> = {
   wujue: "五言绝句",
@@ -32,9 +33,13 @@ export function PoemPanel() {
           <span className="meta-k">诗体</span>
           <span className="meta-v">{FORM_LABEL[selected.form]}</span>
         </div>
-        <div className="meta-row">
-          <span className="meta-k">{isFree ? "自由目录编号" : "全集编号"}</span>
-          <span className="meta-v idx" title={`${selected.babelDigits} 位十进制`}>
+        <div className="meta-row col">
+          <span className="meta-k">
+            {isFree ? "自由目录编号" : "全集编号"}
+            <span className="meta-sub">正序第几首 · {selected.babelDigits} 位</span>
+            <CopyButton text={selected.babelIndex} />
+          </span>
+          <span className="meta-v idx full" title={`${selected.babelDigits} 位十进制 · 反查请到「编号反查」`}>
             {selected.babelIndex}
           </span>
         </div>

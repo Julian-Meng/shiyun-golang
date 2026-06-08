@@ -29,17 +29,18 @@ thing that breaks the hosting model; all index math + render is client-side).
 
 | Area | State |
 |---|---|
-| **Index engine** (`src/engine/engine.ts`) | Babel base-N + 格律 mixed-radix-product rank/unrank, nested dual index, reversible BigInt Feistel, + **自由 variable-length catalog** + **prefixIndex (半编号)**. **44/44 tests**. First char = most-significant digit (enables 半编号). |
+| **Index engine** (`src/engine/engine.ts`) | Babel base-N + 格律 mixed-radix-product rank/unrank, nested dual index, reversible BigInt Feistel, + **自由 variable-length catalog** + **prefixIndex (半编号)**. **44/44 tests**. First char = most-significant digit. **The 全集编号 IS a true 正序 rank** (`babelRank` = the poem's lexicographic position over the freq-ordered 字库) — `babelUnrank` reverses it (`engineApi.pullByIndex`), so 诗⇄编号 is an exact bijection (NOT a hash; the Feistel scatter is used only for spatial layout, never for the displayed number). |
 | **Real data** | Werneror corpus → **29,300 poets · 853,383 poems · 字库 N=12,783** (Simplified). In `public/data/`. |
 | **Real 格律** | 平水韵 lexicon (charlesix59, MIT + pinyin-pro tail): 平 5708 / 仄 7075 / 30 韵部. `公式 格律 toggle` produces tone-valid, rhyming poems. |
-| **Galaxy** | Procedural spiral (arms + bulge + 3-stop colour + differential-rotation shader); poets wound onto the same arms (radius = dynasty). |
+| **Galaxy** | Realistic spiral: **~166k two-layer particles** (soft dim dust + sparse bright arm stars) + a **dense particle bulge** on an exponential profile (no hard glow-sprite → smooth core), **Gaussian point falloff** `exp(-4.5d²)` (continuous nebulosity, not dots), value-noise clumping + dust gaps, HII knots, warm-core→blue-arm colour, **`UnrealBloom`** (`@react-three/postprocessing`) for HDR glow. Poets wound onto the same arms (radius = dynasty). |
 | **Interaction** | 6-DOF fly cam + speed HUD; **screen-space + brightness-gated pick** (click a bright star → poet; click void → random poem); names only on hover/select. |
 | **Search** | Author search → fly-to → poet's real poems + each poem's 全集编号. |
 | **Filters compose** | 诗体 × **常用字** (top-2500 freq chars, avoids 生僻乱码) × **格律**. e.g. 格律+常用字 → "思伦要锁馆/窟置右黎刍/肆昧家谐变/霜辉化铁驹" (valid + readable). |
 | **Dynasty filter** | 15-dynasty legend (先秦→当代) + presets (全部/主要/唐宋). |
 | **自由格式 / 词** (5th form) | A separate variable-length catalog: alphabet = 字库 N real glyphs + a block of W≈N/5 "break" glyphs (radix N+W, length 28). Random pulls split into 词-like variable lines (~4.6 行 × ~5 字). Own 自由目录编号; composes with 常用字; never 格律. `engine.freeUnrank/freeRank/splitFree`. |
 | **诗句 content search** | 诗句 tab: type a line → **真实诗人** hit via the first-line index (床前明月光 → 李白《静夜思》, surfaced + highlighted in PoetPanel) **AND** the **半编号** — the high-order address the opening pins (verified: 静夜思's 81-digit 全集编号 *starts with* the 5-char 半编号). `engineApi.halfIndex/halfIndexAuto`, `load.searchByLine`. |
-| **赠诗网络** | HUD 赠诗 toggle → 3,397 dedication edges (寄/赠/和/次韵… title-parsed; greedy-longest name match + 号/字 alias 晦庵=朱熹; one edge per 兼寄 recipient). 元稹→白居易, 苏辙→苏轼, 黄庭坚→苏轼…. Selecting a poet lights up their往来. Committed `gifts.json` (86 KB). `three/GiftLines`. |
+| **赠诗网络** | HUD 赠诗 toggle → 3,397 dedication edges (寄/赠/和/次韵… title-parsed; greedy-longest name match + 号/字 alias 晦庵=朱熹; one edge per 兼寄 recipient). 元稹→白居易, 苏辙→苏轼, 黄庭坚→苏轼…. **Soft curved Bézier arcs** (endpoint-faded, thin additive); ambient view shows weight≥2; selecting a poet → a clean lit ego-network. Committed `gifts.json` (86 KB). `three/GiftLines`. |
+| **编号反查 (reverse)** | 3rd search tab: paste a 全集编号 + pick a 诗体 → `pullByIndex` (`babelUnrank`) reconstructs the exact poem. **Full numbers, no ellipsis** + copy buttons everywhere. Verified round-trip: 床前明月光 → 81-digit 编号 → 静夜思. |
 
 Three pull modes to feel the project: plain random「牛蝛茙漂綵」→ 格律「趰㵎憣烔岆」→ 格律+常用字
 「思伦要锁馆」; plus 自由格式 for 词-like变行, and the 诗句 tab to find a real poem from one line.
@@ -110,9 +111,12 @@ node pipeline/build-lexicon.mjs                            # lexicon.json (needs
    `three/GiftLines` + HUD toggle.
 
 **Still TODO:**
-4. **Polish** — GPU-pick at scale, bloom (`@react-three/postprocessing`, check R3F version),
-   per-poet (not per-bucket) poem fetch to cut egress, tune galaxy density/framing on a real GPU.
-   赠诗 lines are 1px (WebGL `lineWidth` cap) — for thicker/animated lines use `Line2`/`meshline`.
+4. **Polish** — GPU-pick at scale; per-poet (not per-bucket) poem fetch to cut egress.
+   ~~bloom~~ DONE (`@react-three/postprocessing` v2.19, R3F-8 compatible, `App.tsx` `<Bloom>`).
+   ~~galaxy density~~ DONE (166k two-layer particles + particle bulge + Gaussian falloff). Galaxy
+   counts (`Galaxy.tsx` DUST/STARS/BULGE) + bloom params are perf/taste knobs — tune on the
+   target GPU. 赠诗 lines are 1px (WebGL `lineWidth` cap) — soft curved arcs; for thicker lines
+   use `Line2`/`meshline`.
 5. **Deploy** — static build → `shiyun.<domain>` subdomain, nginx `brotli_static`, precompress
    assets. See DATA_CONTRACT.md §deploy notes. No backend.
 

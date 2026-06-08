@@ -319,6 +319,36 @@ canvas {
 .meta-v.muted {
   color: var(--muted);
 }
+.meta-row.col .meta-k {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.meta-sub {
+  font-size: 10px;
+  color: var(--muted);
+}
+.meta-v.idx.full {
+  max-height: none;
+  color: var(--gold);
+}
+.pi-idx.hit-idx {
+  color: var(--gold);
+}
+.pi-idx-head {
+  display: flex;
+  align-items: center;
+  font-size: 10px;
+  margin-bottom: 2px;
+}
+.pi-idx-full {
+  font-family: ui-monospace, Menlo, monospace;
+  font-size: 10px;
+  line-height: 1.45;
+  color: var(--gold);
+  word-break: break-all;
+}
 .poem-foot {
   margin-top: 16px;
   font-size: 11px;
@@ -465,6 +495,76 @@ canvas {
   color: var(--gold);
   padding: 4px 14px;
   word-break: break-all;
+}
+.half-idx.full {
+  max-height: 6.5em;
+  overflow: auto;
+  line-height: 1.45;
+}
+
+/* copy button (long 编号) */
+.copy-btn {
+  background: rgba(255, 210, 122, 0.12);
+  border: 1px solid rgba(255, 210, 122, 0.4);
+  border-radius: 5px;
+  color: var(--gold);
+  font-size: 10px;
+  padding: 1px 7px;
+  margin-left: 8px;
+  cursor: pointer;
+  vertical-align: middle;
+}
+.copy-btn:hover {
+  background: rgba(255, 210, 122, 0.22);
+}
+
+/* 编号反查 tab */
+.rev-forms {
+  display: flex;
+  gap: 5px;
+  flex-wrap: wrap;
+  padding: 4px 14px 6px;
+}
+.rev-forms .seg-btn {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 7px;
+  color: var(--muted);
+  font-size: 12px;
+  padding: 3px 12px;
+  cursor: pointer;
+}
+.rev-forms .seg-btn.on {
+  color: var(--ink);
+  background: var(--gold);
+  border-color: var(--gold);
+}
+.idx-input {
+  width: calc(100% - 28px);
+  margin: 4px 14px;
+  background: rgba(8, 10, 18, 0.72);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 8px;
+  padding: 8px 10px;
+  color: var(--fg);
+  font-family: ui-monospace, Menlo, monospace;
+  font-size: 12px;
+  resize: vertical;
+  outline: none;
+  word-break: break-all;
+}
+.idx-input:focus {
+  border-color: rgba(255, 210, 122, 0.5);
+}
+.rev-poem {
+  padding: 4px 14px 8px;
+}
+.rev-poem .poem-body {
+  font-size: 19px;
+  line-height: 1.75;
+  color: #f3efe4;
+  letter-spacing: 0.1em;
+  margin-bottom: 6px;
 }
 
 /* poet panel */

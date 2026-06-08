@@ -3,6 +3,7 @@ import { DYNASTY_BY_KEY } from "../data/dynasties";
 import { textBabelIndex } from "../engine/engineApi";
 import type { FormId } from "../engine/engine";
 import type { PoemRecord } from "../data/load";
+import { CopyButton } from "./CopyButton";
 
 const FORM_LABEL: Record<string, string> = {
   wujue: "五绝",
@@ -64,11 +65,19 @@ export function PoetPanel() {
                     <div key={j}>{l}</div>
                   ))}
                 </div>
-                {idx && (
-                  <div className="pi-idx" title={`全集编号 · ${idx.digits} 位`}>
-                    {hit ? `全集编号 ${idx.index.slice(0, 40)}…（${idx.digits} 位）` : `编号 ${idx.index.slice(0, 32)}…`}
-                  </div>
-                )}
+                {idx &&
+                  (hit ? (
+                    <div className="pi-idx hit-idx" title={`全集编号 · 正序第几首 · ${idx.digits} 位`}>
+                      <div className="pi-idx-head">
+                        全集编号 · 正序第 {idx.digits} 位长 <CopyButton text={idx.index} />
+                      </div>
+                      <div className="pi-idx-full">{idx.index}</div>
+                    </div>
+                  ) : (
+                    <div className="pi-idx" title={`全集编号 · ${idx.digits} 位`}>
+                      编号 {idx.index.slice(0, 28)}… <CopyButton text={idx.index} label="复制全编号" />
+                    </div>
+                  ))}
               </div>
             );
           })}

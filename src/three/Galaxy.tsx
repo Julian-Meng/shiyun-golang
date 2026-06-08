@@ -1,7 +1,6 @@
 import * as THREE from "three";
 import { useMemo } from "react";
 import { useFrame } from "@react-three/fiber";
-import { discTexture } from "./disc";
 import { GALAXY, gauss3 } from "./galaxyParams";
 
 function mulberry32(seed: number) {
@@ -14,63 +13,107 @@ function mulberry32(seed: number) {
   };
 }
 
-const ARMS = 20000;
-const BULGE = 8000;
-const TOTAL = ARMS + BULGE;
+// cheap smooth value-noise on a 2D lattice → density clumping / dust gaps so the arms read as
+// real (clumpy) nebulosity rather than clean mathematical spirals.
+function vnoise(x: number, z: number): number {
+  const xi = Math.floor(x), zi = Math.floor(z);
+  const xf = x - xi, zf = z - zi;
+  const u = xf * xf * (3 - 2 * xf), v = zf * zf * (3 - 2 * zf);
+  const h = (a: number, b: number) => {
+    const n = Math.sin(a * 127.1 + b * 311.7) * 43758.5453;
+    return n - Math.floor(n);
+  };
+  const n00 = h(xi, zi), n10 = h(xi + 1, zi), n01 = h(xi, zi + 1), n11 = h(xi + 1, zi + 1);
+  return (n00 * (1 - u) + n10 * u) * (1 - v) + (n01 * (1 - u) + n11 * u) * v;
+}
 
-const cBulge = new THREE.Color("#ffd9a0");
+// Three populations (research: dexyfex Gaussian-falloff density fields + beltoforion exponential
+// disk / concentrated bulge + Bruno-Simon branch skeleton):
+//   • DUST  — many tiny dim soft sprites; this IS the nebulosity that fills the gaps.
+//   • STARS — fewer, larger, brighter resolved stars on the arms (with sparse pink HII knots).
+//   • BULGE — a dense particle cloud on a steep exponential radius, so the bright core accumulates
+//             SMOOTHLY from additive overlap (no hard glow-sprite → no abrupt white blob).
+const DUST = 90000;
+const STARS = 34000;
+const BULGE = 42000;
+const TOTAL = DUST + STARS + BULGE;
+
+const cCore = new THREE.Color("#fff1d6"); // warm old-star bulge (~4500 K)
+const cInner = new THREE.Color("#fff7ec");
 const cMid = new THREE.Color("#ffffff");
-const cArm = new THREE.Color("#6f9bff");
-const cBlue = new THREE.Color("#aaccff");
+const cArm = new THREE.Color("#cfe0ff"); // blue-white young arm stars (~9000 K, less saturated)
+const cHII = new THREE.Color("#ff6d92"); // pink HII regions
 
-// Realistic spiral galaxy backdrop (Points + differential-rotation shader).
 export function Galaxy() {
   const built = useMemo(() => {
     const rnd = mulberry32(31337);
     const R = GALAXY.RADIUS;
+    const NF = 4.2 / R; // noise frequency
     const pos = new Float32Array(TOTAL * 3);
     const col = new Float32Array(TOTAL * 3);
     const scale = new Float32Array(TOTAL);
     const c = new THREE.Color();
 
+    // exponential-disk radius (inverse-transform): dense centre → sparse edge, no banding.
+    const expR = (h: number, cap: number) => Math.min(cap, -h * Math.log(1 - rnd() * 0.9999));
+
     for (let i = 0; i < TOTAL; i++) {
-      let x: number, y: number, z: number, t: number, armProx = 0;
-      if (i < ARMS) {
-        // spiral arm population
-        const rr = Math.pow(rnd(), 1.6) * R;
+      const isBulge = i >= DUST + STARS;
+      const isStar = !isBulge && i >= DUST;
+      let x: number, y: number, z: number, t: number, armProx = 0, bright: number, hii = false;
+
+      if (isBulge) {
+        // dense, round, steep-exponential core
+        const rr = expR(R * 0.05, R * 0.22);
         t = rr / R;
-        const branch = ((i % GALAXY.BRANCHES) / GALAXY.BRANCHES) * Math.PI * 2;
+        const phi = rnd() * Math.PI * 2;
+        const ct = 2 * rnd() - 1; // cos(theta) for a (flattened) sphere
+        const st = Math.sqrt(Math.max(0, 1 - ct * ct));
+        x = rr * st * Math.cos(phi);
+        z = rr * st * Math.sin(phi);
+        y = rr * ct * 0.55; // slightly flattened
+        armProx = 0.25;
+        bright = (1.15 - t * 1.2) * (0.7 + rnd() * 0.5);
+      } else {
+        // disk: spiral arm population on an exponential radius
+        const rr = expR(R * 0.27, R) + R * 0.015;
+        t = rr / R;
+        const branch = (Math.floor(rnd() * GALAXY.BRANCHES) / GALAXY.BRANCHES) * Math.PI * 2;
         const twist = t * GALAXY.TWIST;
         const armDev = gauss3(rnd(), rnd(), rnd()) * GALAXY.ARM_SPREAD;
-        armProx = Math.exp(-((armDev / GALAXY.ARM_SPREAD) ** 2) * 2);
+        armProx = Math.exp(-((armDev / GALAXY.ARM_SPREAD) ** 2) * 2.2);
         const ang = branch + twist + armDev;
-        const sc = (v: number) => Math.pow(rnd(), 2.6) * (rnd() < 0.5 ? -1 : 1) * v * rr;
-        x = Math.cos(ang) * rr + sc(0.18);
-        z = Math.sin(ang) * rr + sc(0.18);
-        y = gauss3(rnd(), rnd(), rnd()) * rr * GALAXY.THICKNESS;
-      } else {
-        // central bulge — round, warm, no spin
-        const rr = Math.abs(gauss3(rnd(), rnd(), rnd())) * R * 0.16;
-        t = Math.min(0.45, rr / R);
-        const phi = rnd() * Math.PI * 2;
-        x = Math.cos(phi) * rr;
-        z = Math.sin(phi) * rr;
-        y = gauss3(rnd(), rnd(), rnd()) * rr * 0.6;
-        armProx = 0.2;
+        const scatter = (v: number) => Math.pow(rnd(), 2.6) * (rnd() < 0.5 ? -1 : 1) * v * rr;
+        x = Math.cos(ang) * rr + scatter(0.16);
+        z = Math.sin(ang) * rr + scatter(0.16);
+        y = gauss3(rnd(), rnd(), rnd()) * rr * GALAXY.THICKNESS * (isStar ? 0.8 : 1.1);
+        // clumping + dust gaps from value noise; brighter on-arm
+        const nz = vnoise(x * NF, z * NF);
+        const armBoost = isStar ? 0.6 + armProx * 1.7 : 0.32 + armProx * 0.7;
+        bright = armBoost * (0.45 + nz * 0.9) * (0.8 + rnd() * 0.4);
+        if (isStar && armProx > 0.55 && rnd() < 0.04) hii = true; // sparse HII knots on arms
       }
+
       pos[i * 3] = x;
       pos[i * 3 + 1] = y;
       pos[i * 3 + 2] = z;
 
-      // 3-stop radial gradient + arm blue-bias + jitter
-      if (t < 0.5) c.copy(cBulge).lerp(cMid, t / 0.5);
-      else c.copy(cMid).lerp(cArm, (t - 0.5) / 0.5);
-      c.lerp(cBlue, armProx * 0.4);
-      const bright = (0.82 + armProx * 0.45) * (0.85 + rnd() * 0.3);
+      // colour: warm core → white mid → blue-white arms; lerp toward arm by arm-proximity
+      if (t < 0.12) c.copy(cCore).lerp(cInner, t / 0.12);
+      else if (t < 0.4) c.copy(cInner).lerp(cMid, (t - 0.12) / 0.28);
+      else c.copy(cMid).lerp(cArm, Math.min(1, (t - 0.4) / 0.5));
+      if (!isBulge) c.lerp(cArm, armProx * 0.45);
+      if (hii) c.copy(cHII);
       col[i * 3] = c.r * bright;
       col[i * 3 + 1] = c.g * bright;
       col[i * 3 + 2] = c.b * bright;
-      scale[i] = (i < ARMS ? 0.5 + (1 - t) * 1.1 : 1.5) * (0.7 + rnd() * 0.6);
+
+      // sizes: dust tiny, stars larger/sparser, bulge medium; HII a touch bigger
+      scale[i] = isBulge
+        ? (0.7 + (0.25 - t) * 2.0) * (0.7 + rnd() * 0.6)
+        : isStar
+          ? (1.0 + armProx * 1.3 + (hii ? 1.2 : 0)) * (0.7 + rnd() * 0.7)
+          : (0.42 + (1 - t) * 0.7) * (0.7 + rnd() * 0.5);
     }
 
     const g = new THREE.BufferGeometry();
@@ -81,7 +124,7 @@ export function Galaxy() {
       transparent: true,
       depthWrite: false,
       blending: THREE.AdditiveBlending,
-      uniforms: { uTime: { value: 0 }, uSize: { value: 3.2 } },
+      uniforms: { uTime: { value: 0 }, uSize: { value: 3.0 } },
       vertexShader: /* glsl */ `
         uniform float uTime; uniform float uSize;
         attribute vec3 aColor; attribute float aScale;
@@ -94,45 +137,43 @@ export function Galaxy() {
           mp.x = d * cos(ang); mp.z = d * sin(ang);
           vec4 vp = viewMatrix * mp;
           gl_Position = projectionMatrix * vp;
-          gl_PointSize = clamp(uSize * aScale * (900.0 / -vp.z), 0.6, 30.0);
+          gl_PointSize = clamp(uSize * aScale * (900.0 / -vp.z), 0.6, 64.0);
           vColor = aColor;
         }`,
+      // Gaussian falloff: soft wide skirts that OVERLAP into a continuous field (no hard dots).
       fragmentShader: /* glsl */ `
         varying vec3 vColor;
         void main() {
-          float s = 1.0 - distance(gl_PointCoord, vec2(0.5)) * 2.0;
-          if (s < 0.02) discard;
-          s = pow(max(s, 0.0), 3.5);
-          gl_FragColor = vec4(vColor * s, s);
+          float d = length(gl_PointCoord - vec2(0.5)) * 2.0;
+          float a = exp(-d * d * 4.5);
+          if (a < 0.004) discard;
+          gl_FragColor = vec4(vColor * a, a);
         }`,
     });
     const points = new THREE.Points(g, m);
     points.frustumCulled = false;
 
-    // cheap "bloom": two big dim additive glow sprites at the core
     const grp = new THREE.Group();
     grp.add(points);
-    const glow = new THREE.Sprite(
+
+    // one very faint, very large, SMOOTH ambient halo (gaussian gradient, no hard edge) — a soft
+    // floor of core glow that bloom (if enabled) lifts further; the bright core itself is particles.
+    const halo = new THREE.Sprite(
       new THREE.SpriteMaterial({
-        map: discTexture(),
-        color: new THREE.Color("#ffdca0"),
+        map: softGlowTexture(),
+        color: new THREE.Color("#ffe9c4"),
         transparent: true,
         depthWrite: false,
         blending: THREE.AdditiveBlending,
-        opacity: 0.32,
+        opacity: 0.18,
       }),
     );
-    glow.scale.set(1020, 1020, 1);
-    grp.add(glow);
-    const glow2 = glow.clone();
-    glow2.material = (glow.material as THREE.SpriteMaterial).clone();
-    (glow2.material as THREE.SpriteMaterial).color = new THREE.Color("#fff2d8");
-    glow2.scale.set(560, 560, 1);
-    grp.add(glow2);
+    halo.scale.set(R * 0.95, R * 0.95, 1);
+    grp.add(halo);
 
     // faint far star dome
     {
-      const n = 5000;
+      const n = 5200;
       const dp = new Float32Array(n * 3);
       const dc = new Float32Array(n * 3);
       for (let i = 0; i < n; i++) {
@@ -153,10 +194,10 @@ export function Galaxy() {
       const dome = new THREE.Points(
         dg,
         new THREE.PointsMaterial({
-          size: 18,
+          size: 16,
           sizeAttenuation: true,
           vertexColors: true,
-          map: discTexture(),
+          map: softGlowTexture(),
           transparent: true,
           opacity: 0.7,
           depthWrite: false,
@@ -176,4 +217,24 @@ export function Galaxy() {
   });
 
   return <primitive object={built.grp} />;
+}
+
+// smooth gaussian-ish radial gradient (softer than disc.ts's hard core) for ambient glow.
+let _soft: THREE.Texture | null = null;
+function softGlowTexture(): THREE.Texture {
+  if (_soft) return _soft;
+  const s = 128;
+  const cv = document.createElement("canvas");
+  cv.width = cv.height = s;
+  const ctx = cv.getContext("2d")!;
+  const g = ctx.createRadialGradient(s / 2, s / 2, 0, s / 2, s / 2, s / 2);
+  g.addColorStop(0, "rgba(255,255,255,0.95)");
+  g.addColorStop(0.18, "rgba(255,255,255,0.38)");
+  g.addColorStop(0.45, "rgba(255,255,255,0.09)");
+  g.addColorStop(1, "rgba(255,255,255,0)");
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, s, s);
+  _soft = new THREE.CanvasTexture(cv);
+  _soft.needsUpdate = true;
+  return _soft;
 }

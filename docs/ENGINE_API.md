@@ -47,7 +47,12 @@ pullAt(form: PullForm, pos, {lushiOnly?, commonK?})
 // lines come from splitFree (id ≥ realN = a line break), index is the 自由目录 address, no 格律.
 
 halfIndex(form: FormId, han): HalfIndex | null   // 半编号 of a typed OPENING (han.length ≤ L)
-halfIndexAuto(han): HalfIndex | null             // ↑ but auto-picks the smallest fitting form
+halfIndexAuto(han): HalfIndex | null             // ↑ but auto-picks the form by line length
+
+pullByIndex(form: PullForm, indexStr): IndexPoem | null   // 反查: 编号 → 诗 (the bijection's
+// other direction). babelUnrank/freeUnrank the decimal index back into the poem at that catalog
+// position. {lines, inRange, ...}. The displayed 全集编号 is babelRank itself (a true 正序 rank,
+// first char = MSB), so pullByIndex(form, poemIndex) reproduces the exact poem — 诗 ⇄ 编号.
 interface HalfIndex { form; index; digits; locked; freeChars; total }
 // `index` = the high-order address the opening pins (prefix padded with char-id 0); the real
 // poem's full 全集编号 starts with these same high-order digits. `freeChars` low positions stay
