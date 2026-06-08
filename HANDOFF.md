@@ -9,6 +9,30 @@ never stored* (every poem ⇄ a big-integer index, bijectively).
 
 ---
 
+## ⚠ Canonical base — READ BEFORE BRANCHING (worktree hand-off)
+
+**`main` is the canonical, up-to-date branch.** Cut your worktree FROM `main`, and when you finish,
+**fast-forward `main` onto your branch** (`git checkout main && git merge --ff-only <your-branch> &&
+git push origin main`) so the NEXT agent starts from your work — not a stale commit.
+
+*Real failure that motivated this (do not repeat):* a session left all its advanced work on a
+feature branch (`claude/flamboyant-cannon-…`) and never advanced `main`. The next worktree was cut
+from the stale `main` (8 commits behind) and silently lost 赠诗 / 自由格式 / bloom / 模糊搜索 /
+新诗诗人 …, and poem loading was dead. **If `main`'s tip is not the latest verified work, the
+hand-off is broken — fix `main` first.** Check with `git log --oneline --all --graph`.
+
+**Heavy data is git-ignored** — `public/data/poems/` (235 MB) and `public/data/lines/` (791 MB).
+A fresh worktree has NEITHER, so "click a poet → 载入作品…" hangs and 诗句 search finds nothing.
+Provision before you start, one of two ways:
+- regenerate: `node --max-old-space-size=4096 pipeline/build-data.mjs` (needs the corpora), **or**
+- (fast, same machine) junction them from a worktree that already has them — PowerShell:
+  `cmd /c mklink /J "<new>\public\data\poems" "<existing>\public\data\poems"` (and `…\lines`).
+
+**Backups:** private GitHub repo `github.com/Cohenjikan/shiyun` (all branches); local all-branches
+bundle at `C:\Users\Cohen\Desktop\shiyun-ALL-branches-backup.bundle` (restore: `git clone <bundle>`).
+
+---
+
 ## 1. Run it (works out of the box — data is already in `public/data`)
 
 ```bash
@@ -107,7 +131,23 @@ node pipeline/build-lexicon.mjs                            # lexicon.json (needs
 
 ## 6. Remaining work (next, roughly in priority)
 
-**DONE this session** (all verified — `npm run build` + 44/44 tests + browser DOM checks):
+**DONE — rotation-merge + locate session (latest; verified: build + 44/44 + DOM):**
+- ✅ **One unified galaxy spin** (`galaxyParams.galaxySpin` + `advanceSpin`/`spinXZ`/`unspinXZ`).
+  The backdrop used to spin in its own shader (with an x/z reflection) while poets/arcs/markers
+  never rotated → layers wound against each other. Now Galaxy points, the PoetStars group, the
+  赠诗 `GiftLines` object, and the void markers ALL rotate by one shared `rotation.y`, advanced
+  once/frame in Galaxy. CPU side (`screenPick`, fly-to, void-click) converts LOCAL↔WORLD with
+  `spinXZ`/`unspinXZ`, so picking/labels/markers stay aligned as it turns.
+- ✅ **Void click no longer moves the camera** (removed the inaccurate glide-focus); the marker
+  gets a **bright birth flare → hold → linear settle** to a quiet base, kept SMALL (brightness,
+  not size — bloom does the glow). `PulledStars.tsx`.
+- ✅ **定位虚空 (fixed-coordinate locate)** — 编号反查 + 半编号 get a "🛸 定位虚空" button that flies
+  to the index's ONE canonical void point (`engineApi.pulledFromIndex → pointForBabelIndex`) and
+  lights the star with the flare marker. A number / opening is now a *place*. `SearchPanel.tsx`.
+- ✅ **Pick perf** — hoisted `cos/sin` out of the 29,808-poet `screenPick` loop (was a per-poet
+  `spinXZ` → 29k×2 trig per hover). `FlyControls.tsx`.
+
+**DONE — galaxy/features session** (all verified — `npm run build` + 44/44 tests + browser DOM checks):
 1. ✅ **Galaxy realism** — Gaussian point falloff `exp(-4.5d²)` (continuous nebulosity, not
    dots); ~166k particles in 3 populations (DUST + arm STARS + a dense particle **BULGE**
    replacing the old hard glow-sprite → smooth core); exponential-disk radius, value-noise
@@ -122,8 +162,9 @@ node pipeline/build-lexicon.mjs                            # lexicon.json (needs
    gilded-glow landmarks.
 4. ✅ **Void-pull markers** (`PulledStars.tsx`, full rewrite) — small twinkling captured-light
    spots (not giant balls); lifecycle fade-in, cap 20 ALIVE (oldest flickers out + self-destructs),
-   distance-cull; a void click **glide-focuses** the camera (FlyControls fly-to now
-   camera-relative). `store.Pull` has an id; `MAX_PULLS=24`.
+   distance-cull. `store.Pull` has an id; `MAX_PULLS=24`. *(Later session: the void-click
+   glide-focus was REMOVED — clicking the void now lights the star in place without a camera move;
+   markers gained the birth flare. See the rotation-merge block above.)*
 5. ✅ **赠诗 arcs** (`GiftLines.tsx`) — cubic Bézier, control points pulled toward centre →
    **bundled flows** (poor-man's hierarchical edge bundling, `BUNDLE=0.3`); a custom shader sends
    a soft pulse giver→receiver (flow direction); endpoint-faded; ambient = weight≥3, selecting a
@@ -146,11 +187,23 @@ node pipeline/build-lexicon.mjs                            # lexicon.json (needs
     4,849 赠诗 edges (少陵→杜甫, 子瞻→苏轼, 香山→白居易…).
 
 **Still TODO:**
-12. **Deploy** — static build → `shiyun.<domain>` subdomain, nginx `brotli_static`, precompress
+12. **per-poet poem fetch (egress)** — clicking a poet still downloads its whole `poems/{bucket}.json`
+    (~0.9 MB) to read a few KB. *Deliberately deferred this session* (it risks the just-restored
+    loading + needs pipeline work). Recommended design, no backend: have `build-data.mjs` write each
+    bucket as concatenated poet-records + a sidecar `{poetId:[offset,len]}` index, and make
+    `load.ts::loadPoetPoems` issue an HTTP **Range** request for just that slice (static hosts/nginx
+    + vite dev all support Range). Avoid one-file-per-poet (29,808 tiny files).
+13. **Deploy** — static build → `shiyun.<domain>` subdomain, nginx `brotli_static`, precompress
     assets. See DATA_CONTRACT.md §deploy notes. No backend.
-13. **Polish** — GPU-pick at scale; per-poet (not per-bucket) poem fetch to cut egress; thicker
-    赠诗 lines (`Line2`/`meshline` — current arcs are 1px, WebGL `lineWidth` cap); 无名氏 collapse;
-    modern-poet **dynasty refinement** (a date table to split 近现代/当代 more finely than 民国-only).
+14. **Polish** — GPU-pick at scale (the `screenPick` loop is still O(29,808)/hover, now with cos/sin
+    hoisted but no spatial index); thicker 赠诗 lines (`Line2`/`meshline` — current arcs are 1px,
+    WebGL `lineWidth` cap); 无名氏 collapse; modern-poet **dynasty refinement** (date table to split
+    近现代/当代 more finely than 民国-only).
+15. **True round-trip void coords** — `pullAt` (click→`indexFromPoint`) and the locate/permalink map
+    (`pointForBabelIndex`) are NOT inverses, so clicking a located poem's exact spot won't reproduce
+    it. A clean bijection over continuous space ↔ a 10⁸²-index catalog is impossible at float
+    precision; either accept it (clicks = local noise sampling; locate = the canonical address) or
+    document it in-UI. Not a bug — a design choice to make explicit.
 
 ### Locked decisions (don't relitigate without reason)
 - **Default = random (Babel) generation; no further self-built 平仄 research** — the 格律
