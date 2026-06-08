@@ -43,9 +43,9 @@ bytes) — see `src/data/dynasties.ts` (`bandRadius`, `hashStr`, `spherePoint`).
 Locked sources (verified 2026-06-08). Combined: **857,877 poems / 29,808 poets** (字库 N = 12,877).
 
 - **Backbone — [`Werneror/Poetry`](https://github.com/Werneror/Poetry)** — ~853k poems /
-  ~29.3k authors, **先秦 → 当代**, MIT, CSV, columns `题目, 朝代, 作者, 内容`, **Simplified**,
-  split by dynasty. The only large open corpus covering the full sweep. Author = string only;
-  **no structured 生卒 dates**; dynasty is per-poem (`朝代`).
+  ~29.3k authors (Werneror alone, before the modern merge), **先秦 → 当代**, MIT, CSV, columns
+  `题目, 朝代, 作者, 内容`, **Simplified**, split by dynasty. The only large open corpus covering
+  the full sweep. Author = string only; **no structured 生卒 dates**; dynasty is per-poem (`朝代`).
 - **Quality overlay (唐宋) — [`chinese-poetry`](https://github.com/chinese-poetry/chinese-poetry)**
   — Traditional 唐/宋 text (`{author,title,paragraphs[],id}`), used where it overlaps
   Werneror's 唐/宋 rows (cleaner 繁体, better line segmentation).
@@ -57,8 +57,9 @@ Locked sources (verified 2026-06-08). Combined: **857,877 poems / 29,808 poets**
 Per-poet record `{name, dynasty, poemCount}` = `GROUP BY 作者, 朝代`. Dates need an external
 Wikidata join (out of scope for v1).
 
-Canonical script = **Traditional** (OpenCC `s2t`); the 字库/index math operate on it so
-rank↔unrank stays a clean bijection. Simplified is a display-only toggle.
+Canonical script = **Simplified** — the corpus is already Simplified and there is **no OpenCC at
+runtime** (corpus = index = search script). The 字库/index math operate on Simplified so
+rank↔unrank stays a clean bijection.
 
 ## Dynasty taxonomy (canonical 15 keys)
 

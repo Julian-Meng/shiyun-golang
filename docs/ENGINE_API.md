@@ -113,8 +113,8 @@ freeUnrank(N, k: bigint, L?): number[]   // base-(N+W) digits; ids ≥ N are lin
 freeRank(N, ids: number[]): bigint
 splitFree(N, ids): number[][]            // group runs of real chars, drop break ids
 ```
-A *block* of W break glyphs (not one separator) is used on purpose: at N=12,783 a single
-separator is hit ~1/12,784 of the time → no breaks; W≈N/5 gives break prob ≈ 1/6 ⇒ mean line
+A *block* of W break glyphs (not one separator) is used on purpose: at N=12,877 a single
+separator is hit ~1/12,878 of the time → no breaks; W≈N/5 gives break prob ≈ 1/6 ⇒ mean line
 ≈ 5 real chars (词-like). `splitFree` drops break ids for display only, so the index is NOT
 canonicalized and `freeRank(freeUnrank(k)) === k` stays exact.
 
