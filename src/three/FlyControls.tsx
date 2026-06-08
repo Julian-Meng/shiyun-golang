@@ -5,7 +5,7 @@ import { useStore } from "../state/store";
 import { pullAt, COMMON_K } from "../engine/engineApi";
 import { loadPoetPoems } from "../data/load";
 import { pickTargets, SIZE_SCALE } from "./picking";
-import { spinXZ, unspinXZ } from "./galaxyParams";
+import { spinXZ, unspinXZ, galaxySpin } from "./galaxyParams";
 
 const BASE_SPEED = 140; // world units/sec at speed ×1 (slow, galactic feel)
 
@@ -42,15 +42,19 @@ export function FlyControls() {
       const dpr = gl.getPixelRatio();
       const hidden = st().hidden;
       const cp = camera.position;
+      // stored positions are LOCAL; rotate into world by the current galaxy spin so picking
+      // stays aligned with the rendered (spinning) stars. Hoist cos/sin OUT of the 29k-poet
+      // loop (was a per-poet spinXZ → 29k×2 trig per hover); inline matches galaxyParams.spinXZ.
+      const ca = Math.cos(galaxySpin.angle);
+      const sa = Math.sin(galaxySpin.angle);
       let best = -1;
       let bestD = Infinity;
       for (let i = 0; i < poets.length; i++) {
         const p = poets[i];
         if (hidden.has(p.dynasty)) continue;
-        // stored positions are LOCAL; rotate into world by the current galaxy spin so
-        // picking stays aligned with the rendered (spinning) stars.
-        const y = pos[i * 3 + 1];
-        const [x, z] = spinXZ(pos[i * 3], pos[i * 3 + 2]);
+        const lx = pos[i * 3], y = pos[i * 3 + 1], lz = pos[i * 3 + 2];
+        const x = lx * ca + lz * sa;
+        const z = -lx * sa + lz * ca;
         const dist = Math.hypot(x - cp.x, y - cp.y, z - cp.z);
         // CSS-px glow radius, matching the shader's gl_PointSize formula
         const apparent = (Math.min(70, Math.max(1.2, (sizes[i] * SIZE_SCALE) / dist)) * 0.5) / dpr;

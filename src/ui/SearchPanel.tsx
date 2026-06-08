@@ -1,7 +1,7 @@
 import { useRef, useState } from "react";
 import { searchPoets, searchByLine, loadPoetPoems, type PoetRow, type LineHit } from "../data/load";
 import { DYNASTY_BY_KEY } from "../data/dynasties";
-import { halfIndexAuto, pullByIndex, type HalfIndex, type IndexPoem, type PullForm } from "../engine/engineApi";
+import { halfIndexAuto, pullByIndex, pulledFromIndex, type HalfIndex, type IndexPoem, type PullForm } from "../engine/engineApi";
 import { useStore } from "../state/store";
 import { poetPosition } from "../three/PoetStars";
 import { CopyButton } from "./CopyButton";
@@ -28,9 +28,20 @@ export function SearchPanel() {
   const [rev, setRev] = useState<IndexPoem | null>(null);
   const [revReal, setRevReal] = useState<{ name: string; title: string } | null>(null);
   const selectPoet = useStore((s) => s.selectPoet);
+  const selectPoem = useStore((s) => s.selectPoem);
   const setFlyTarget = useStore((s) => s.setFlyTarget);
   const reqRef = useRef(0);
   const revReqRef = useRef(0);
+
+  // 定位虚空: a known index has ONE fixed canonical point in the void (engine's preset
+  // coordinate map, pointForBabelIndex). Drop the camera onto it and light the star — the
+  // same flare marker a void click makes — so 编号/半编号 feels like a place, not just a number.
+  function locateInVoid(form: PullForm, indexStr: string) {
+    const poem = pulledFromIndex(form, indexStr);
+    if (!poem) return;
+    selectPoem(poem); // flare marker at poem.pos (LOCAL canonical point; rotates with the galaxy)
+    setFlyTarget(poem.pos); // fly there — camera + marker share the spin, so it lands on the star
+  }
 
   function onChangePoet(v: string) {
     setQ(v);
@@ -166,6 +177,9 @@ export function SearchPanel() {
             <div className="half-note dim">
               余 {half.freeChars} 字自由 → 这个开头下共有 字库<sup>{half.freeChars}</sup> 首诗,全在诗云的同一条高位街区里。
             </div>
+            <button className="locate-btn" onClick={() => locateInVoid(half.form, half.index)}>
+              🛸 飞到这条高位街区 · 点亮代表星
+            </button>
           </div>
         </div>
       )}
@@ -206,6 +220,9 @@ export function SearchPanel() {
                       </div>
                     ))}
                   </div>
+                  <button className="locate-btn" onClick={() => locateInVoid(rev.form, rev.index)}>
+                    🛸 定位虚空 · 飞过去点亮这首诗
+                  </button>
                   {revReal && (
                     <div className="rev-real">
                       🎯 这串编号正好对应一首真实存在的诗：{revReal.name}《{revReal.title}》

@@ -622,6 +622,26 @@ canvas {
   text-shadow: 0 1px 14px rgba(255, 210, 122, 0.12);
 }
 
+/* 定位虚空 — fly to a known index's fixed point in the void and light its star */
+.locate-btn {
+  display: block;
+  width: calc(100% - 28px);
+  margin: 8px 14px 4px;
+  padding: 8px 10px;
+  background: linear-gradient(180deg, rgba(255, 210, 122, 0.16), rgba(255, 210, 122, 0.07));
+  border: 1px solid rgba(255, 210, 122, 0.42);
+  border-radius: 8px;
+  color: var(--gold);
+  font-size: 13px;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+.locate-btn:hover {
+  background: linear-gradient(180deg, rgba(255, 210, 122, 0.26), rgba(255, 210, 122, 0.12));
+  border-color: rgba(255, 210, 122, 0.7);
+}
+
 /* poet panel */
 .poet-panel {
   position: fixed;
