@@ -10,7 +10,6 @@ import { HUD } from "./ui/HUD";
 import { PoemPanel } from "./ui/PoemPanel";
 import { PoetPanel } from "./ui/PoetPanel";
 import { SearchPanel } from "./ui/SearchPanel";
-import { DynastyLegend } from "./ui/DynastyLegend";
 import { useStore } from "./state/store";
 import { applyHash, syncHash } from "./state/permalink";
 import { loadData } from "./data/load";
@@ -21,6 +20,8 @@ export default function App() {
   const quality = useStore((s) => s.quality);
   const selected = useStore((s) => s.selected);
   const selectedPoet = useStore((s) => s.selectedPoet);
+  const uiHidden = useStore((s) => s.uiHidden);
+  const toggleUI = useStore((s) => s.toggleUI);
 
   useEffect(() => {
     loadData()
@@ -30,6 +31,20 @@ export default function App() {
       })
       .catch((e) => console.error("数据载入失败", e));
   }, [setLoaded]);
+
+  // H = hide / show ALL overlay UI (screenshot mode). Ignored while typing in a field.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const a = document.activeElement;
+      if (a && (a.tagName === "INPUT" || a.tagName === "TEXTAREA")) return;
+      if (e.code === "KeyH") {
+        e.preventDefault();
+        useStore.getState().toggleUI();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
 
   // keep the address bar shareable as the selection changes
   useEffect(() => {
@@ -67,12 +82,21 @@ export default function App() {
         )}
       </Canvas>
 
-      <div className="crosshair" />
-      <HUD />
-      {loaded && <SearchPanel />}
-      {loaded && <DynastyLegend />}
-      <PoemPanel />
-      <PoetPanel />
+      {!uiHidden && (
+        <>
+          <HUD />
+          {loaded && <SearchPanel />}
+          <PoemPanel />
+          <PoetPanel />
+          <button
+            className="ui-hide-btn"
+            onClick={toggleUI}
+            title="隐藏全部界面以便截图 · 快捷键 H 恢复"
+          >
+            隐藏界面 ⌨H
+          </button>
+        </>
+      )}
 
       {!loaded && (
         <div className="loading-screen">

@@ -76,13 +76,15 @@ those stars render at 2.4× size with a gilded glow so the cloud has named ancho
 | `flyTarget` | `[x,y,z]` the camera tweens toward, then auto-clears |
 | `pulls` | recent void-pull markers (`PulledStars`); each `Pull` now has a stable `id` so markers animate their own birth/death. `MAX_PULLS=24`, `PulledStars` caps ALIVE at 20 |
 | `quality` | render quality `"high" \| "low"` (`toggleQuality`) — `low` halves galaxy counts (~166k→~59k) + disables bloom, for weak GPUs |
+| `uiHidden` | hide ALL overlay UI for screenshots (`toggleUI`) — corner 隐藏界面 button + the **H** hotkey (`App` keydown, ignored while typing) |
 
 Transient camera transform lives in `FlyControls` refs, NOT the store (no 60fps re-renders).
 
 ## 5. Interaction contract (current shell — reimplement as you like)
 
-- **Pointer drag** = look; **WASD / Space / Shift** = fly; **wheel** = speed. Keys are
-  ignored while an `<input>` is focused.
+- **Pointer drag** = look; **WASD / Space / Shift** = fly; **wheel** = speed; **H** = hide/show all
+  overlay UI (screenshot mode). Keys are ignored while an `<input>`/`<textarea>` is focused. The aim
+  point is the **real cursor** (the centre crosshair sprite was removed — picking is at the cursor).
 - **Click (no drag)** → `pickTargets.pick(x,y)` (O(1) GPU colour-ID pick, `three/gpuPick.ts`):
   - hit a poet (its dynasty not hidden, star above the size gate) → `selectPoet` + `loadPoetPoems` → `PoetPanel`.
   - else → `pullAt(form, point)` → a random poem → `PoemPanel` + a gold marker.
@@ -133,13 +135,18 @@ Transient camera transform lives in `FlyControls` refs, NOT the store (no 60fps 
   `engineApi.commonLexicon(K)` → tone-valid poems in common chars.
 - **自由格式 / 词** (done): a 5th `PullForm="ziyou"` over a radix-(N+W) catalog — see
   ENGINE_API.md. HUD 自由 button; PoemPanel shows 自由目录编号 (no 格律 row); composes with 常用字.
-- **诗句 content search** (done): `SearchPanel` 诗人/诗句/编号反查 tabs. 诗句 → `searchByLine`
-  (now matches ANY line, 真实诗人 highlighted in PoetPanel via `store.poetFocus`) + `halfIndexAuto`
-  (半编号, always-on, no data).
-- **编号反查 reverse search** (done): 3rd search tab. `engineApi.pullByIndex(form, indexStr)` unranks
-  a pasted number back to its poem; full untruncated numbers everywhere + copy buttons
-  (`src/ui/CopyButton.tsx`). Loop closure: it checks the line index + full text and reports if the
-  number is a REAL existing poem.
+- **Consolidated search panel** (done): `SearchPanel` is ONE collapsible panel with tabs **诗人 / 诗句 /
+  造诗 / 朝代** (the old floating `DynastyLegend` was merged into the 朝代 tab and deleted). 诗人/诗句
+  inputs act on **Enter** (fly to / open the top hit). 诗句 → `searchByLine` (ANY line, 真实诗人
+  highlighted via `store.poetFocus`) + `halfIndexAuto` (半编号).
+- **造诗 (compose) tab** (done): form chips + a `填字→编号 / 凭编号→诗` toggle. **填字→编号** is the
+  intuitive forward path — a fill-in **grid** of single-char inputs for 五/七绝·律, or a **textarea**
+  (回车换行) for 自由 — and the engine reports the catalog 编号 live (`textBabelIndex` / `anyTextIndex`),
+  no number math by the user; `findReal` flags if the typed poem is a real corpus poem. **凭编号→诗** is
+  the reverse lookup (`engineApi.pullByIndex`, full untruncated numbers + copy).
+- **PoetPanel = title drawer / accordion** (done): poem **titles** only (50/page + 显示更多), each with a
+  lazy 复制编号; click a title to expand its content + full 编号. The 编号 (large BigInt) is ranked
+  **lazily per poem** on expand/copy (`idxCache` ref), not for the whole list.
 - **Permalinks** (done): `src/state/permalink.ts` — `#a=<poetId>` / `#p=<form>.<index>`; `ShareButton`
   (🔗 分享, in `CopyButton.tsx`) in the poem + poet panels; `engineApi.pulledFromIndex` rebuilds a
   poem from a link; `App` restores the selection on load (`applyHash`) and keeps the hash in sync.

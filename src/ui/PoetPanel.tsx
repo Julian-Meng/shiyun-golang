@@ -1,10 +1,9 @@
-import { useMemo } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useStore } from "../state/store";
 import { DYNASTY_BY_KEY } from "../data/dynasties";
 import { textBabelIndex, anyTextIndex } from "../engine/engineApi";
 import type { FormId } from "../engine/engine";
-import type { PoemRecord } from "../data/load";
-import { CopyButton, ShareButton } from "./CopyButton";
+import { ShareButton } from "./CopyButton";
 
 const FORM_LABEL: Record<string, string> = {
   wujue: "五绝",
@@ -13,12 +12,31 @@ const FORM_LABEL: Record<string, string> = {
   qilu: "七律",
   other: "古体/其它",
 };
+const PAGE = 50; // titles shown before "显示更多"
 
-interface Row {
-  pm: PoemRecord;
-  hit: boolean;
-  idx: ReturnType<typeof textBabelIndex>;
-  anyIdx: ReturnType<typeof anyTextIndex>;
+type IdxInfo = { kind: "full" | "free"; index: string; digits: number; chars?: number; lines?: number } | null;
+
+// A copy button that computes its (possibly huge BigInt) 编号 ONLY on click — keeps the collapsed
+// title list cheap (no upfront rank for every poem).
+function LazyCopy({ compute, label }: { compute: () => string | null; label: string }) {
+  const [done, setDone] = useState(false);
+  return (
+    <button
+      className="copy-btn"
+      title="复制完整编号"
+      onClick={(e) => {
+        e.stopPropagation();
+        const t = compute();
+        if (!t) return;
+        navigator.clipboard?.writeText(t).then(() => {
+          setDone(true);
+          setTimeout(() => setDone(false), 1200);
+        });
+      }}
+    >
+      {done ? "已复制 ✓" : label}
+    </button>
+  );
 }
 
 export function PoetPanel() {
@@ -27,40 +45,59 @@ export function PoetPanel() {
   const focus = useStore((s) => s.poetFocus);
   const close = useStore((s) => s.clearPoet);
 
-  // 诗句 search → surface the EXACT matched poem first (by its index in the poet's poems[], the
-  // pipeline write order the firstline ref's `i` points at — so duplicate titles / shared openings
-  // can't false-match), highlighted; then the rest, capped at 60 total. The 全集/自由编号 are
-  // (sometimes large) BigInt ranks — anyTextIndex over a long 新诗 is O(n²) — so compute them ONCE
-  // per poet load here, not on every render.
-  const rows = useMemo<Row[]>(() => {
+  const [expanded, setExpanded] = useState<Set<number>>(new Set());
+  const [shown, setShown] = useState(PAGE);
+  // lazy 编号 cache (poemIdx → computed index) so an expanded/copied poem ranks once, not per render.
+  const idxCache = useRef<Map<number, IdxInfo>>(new Map());
+
+  // reset per poet load; auto-expand the 诗句-search hit poem
+  useEffect(() => {
+    idxCache.current = new Map();
+    const init = new Set<number>();
+    if (focus && focus.poemIdx >= 0) init.add(focus.poemIdx);
+    setExpanded(init);
+    setShown(PAGE);
+  }, [poet?.id, poems, focus]);
+
+  // hit poem first, then the rest in write order — show only the titles (drawer), content on click.
+  const order = useMemo(() => {
     if (!poems) return [];
-    const CAP = 60;
     const fIdx = focus?.poemIdx ?? -1;
-    const matched: { pm: PoemRecord; hit: boolean }[] = [];
-    const rest: { pm: PoemRecord; hit: boolean }[] = [];
-    poems.forEach((pm, i) => (i === fIdx ? matched : rest).push({ pm, hit: i === fIdx }));
-    const ordered = [...matched, ...rest.slice(0, CAP - matched.length)];
-    return ordered.map(({ pm, hit }) => {
-      const isOther = pm.f === "other";
-      const idx = !isOther ? textBabelIndex(pm.f as FormId, pm.p.join("")) : null;
-      // 新诗/古体: variable length → arbitrary-length 自由编号 (reversible in 编号反查·自由)
-      const anyIdx = isOther ? anyTextIndex(pm.p) : null;
-      return { pm, hit, idx, anyIdx };
-    });
+    const rest = poems.map((_, i) => i).filter((i) => i !== fIdx);
+    return fIdx >= 0 && fIdx < poems.length ? [fIdx, ...rest] : rest;
   }, [poems, focus]);
 
   if (!poet) return null;
   const dyn = DYNASTY_BY_KEY[poet.dynasty];
 
+  function indexFor(i: number): IdxInfo {
+    const cache = idxCache.current;
+    if (cache.has(i)) return cache.get(i)!;
+    const pm = poems![i];
+    let res: IdxInfo = null;
+    if (pm.f === "other") {
+      const a = anyTextIndex(pm.p);
+      if (a) res = { kind: "free", index: a.index, digits: a.digits, chars: a.chars, lines: a.lines };
+    } else {
+      const t = textBabelIndex(pm.f as FormId, pm.p.join(""));
+      if (t) res = { kind: "full", index: t.index, digits: t.digits };
+    }
+    cache.set(i, res);
+    return res;
+  }
+  function toggle(i: number) {
+    setExpanded((prev) => {
+      const next = new Set(prev);
+      next.has(i) ? next.delete(i) : next.add(i);
+      return next;
+    });
+  }
+
   return (
     <div className="poet-panel">
-      <button className="panel-close" onClick={close} aria-label="关闭">
-        ×
-      </button>
+      <button className="panel-close" onClick={close} aria-label="关闭">×</button>
       <div className="poet-head">
-        <span className="poet-name" style={{ color: dyn?.color }}>
-          {poet.name}
-        </span>
+        <span className="poet-name" style={{ color: dyn?.color }}>{poet.name}</span>
         <span className="poet-sub">
           {dyn?.label ?? poet.dynasty} · {poet.poemCount} 首真实作品 <ShareButton />
         </span>
@@ -69,48 +106,50 @@ export function PoetPanel() {
         <div className="loading-row">载入作品…</div>
       ) : (
         <div className="poem-list">
-          {rows.map(({ pm, hit, idx, anyIdx }, i) => (
-            <div className={hit ? "poem-item hit" : "poem-item"} key={i}>
-              <div className="pi-title">
-                {pm.t || "（无题）"} <span className="pi-form">{FORM_LABEL[pm.f]}</span>
-                {hit && <span className="pi-hit">你搜的这首</span>}
-              </div>
-              <div className="pi-body">
-                {pm.p.map((l, j) => (
-                  <div key={j}>{l}</div>
-                ))}
-              </div>
-              {idx &&
-                (hit ? (
-                  <div className="pi-idx hit-idx" title={`全集编号 · 正序第几首 · ${idx.digits} 位`}>
-                    <div className="pi-idx-head">
-                      全集编号 · 正序第 {idx.digits} 位长 <CopyButton text={idx.index} />
+          {order.slice(0, shown).map((i) => {
+            const pm = poems[i];
+            const isHit = i === (focus?.poemIdx ?? -1);
+            const isOpen = expanded.has(i);
+            return (
+              <div className={isHit ? "poem-item hit" : "poem-item"} key={i}>
+                <button className="pi-row" onClick={() => toggle(i)}>
+                  <span className="pi-caret">{isOpen ? "▾" : "▸"}</span>
+                  <span className="pi-title">{pm.t || "（无题）"}</span>
+                  <span className="pi-form">{FORM_LABEL[pm.f]}</span>
+                  {isHit && <span className="pi-hit">搜的这首</span>}
+                  <span className="pi-row-spacer" />
+                  <LazyCopy compute={() => indexFor(i)?.index ?? null} label="复制编号" />
+                </button>
+                {isOpen && (
+                  <div className="pi-detail">
+                    <div className="pi-body">
+                      {pm.p.map((l, j) => (
+                        <div key={j} className={pm.f === "other" ? "wrap" : ""}>{l}</div>
+                      ))}
                     </div>
-                    <div className="pi-idx-full">{idx.index}</div>
+                    {(() => {
+                      const r = indexFor(i);
+                      if (!r) return <div className="pi-idx dim">含字库外字符 · 无固定编号</div>;
+                      const label =
+                        r.kind === "free"
+                          ? `自由编号 · ${r.chars}字 ${r.lines}行 · ${r.digits}位`
+                          : `全集编号 · ${r.digits}位`;
+                      return (
+                        <div className="pi-idx-block">
+                          <div className="pi-idx-head">{label}<LazyCopy compute={() => r.index} label="复制" /></div>
+                          <div className="pi-idx-full">{r.index}</div>
+                        </div>
+                      );
+                    })()}
                   </div>
-                ) : (
-                  <div className="pi-idx" title={`全集编号 · ${idx.digits} 位`}>
-                    编号 {idx.index.slice(0, 28)}… <CopyButton text={idx.index} label="复制全编号" />
-                  </div>
-                ))}
-              {anyIdx &&
-                (hit ? (
-                  <div className="pi-idx hit-idx" title={`自由编号（任意长）· ${anyIdx.chars} 字 ${anyIdx.lines} 行 · ${anyIdx.digits} 位 · 可在「编号反查·自由」还原`}>
-                    <div className="pi-idx-head">
-                      自由编号 · {anyIdx.chars} 字 {anyIdx.lines} 行 · {anyIdx.digits} 位{" "}
-                      <CopyButton text={anyIdx.index} />
-                    </div>
-                    <div className="pi-idx-full">{anyIdx.index}</div>
-                  </div>
-                ) : (
-                  <div className="pi-idx" title={`自由编号（任意长）· ${anyIdx.digits} 位 · 可在「编号反查·自由」还原`}>
-                    自由编号 {anyIdx.index.slice(0, 28)}… <CopyButton text={anyIdx.index} label="复制全编号" />
-                  </div>
-                ))}
-            </div>
-          ))}
-          {poems.length > rows.length && (
-            <div className="more">…共 {poems.length} 首,仅显示前 {rows.length}</div>
+                )}
+              </div>
+            );
+          })}
+          {order.length > shown && (
+            <button className="more-btn" onClick={() => setShown((s) => s + PAGE)}>
+              显示更多（剩 {order.length - shown} 首）
+            </button>
           )}
         </div>
       )}

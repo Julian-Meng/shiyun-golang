@@ -1,7 +1,17 @@
 import { useRef, useState } from "react";
 import { searchPoets, searchByLine, loadPoetPoems, type PoetRow, type LineHit } from "../data/load";
-import { DYNASTY_BY_KEY } from "../data/dynasties";
-import { halfIndexAuto, pullByIndex, pulledFromIndex, type HalfIndex, type IndexPoem, type PullForm } from "../engine/engineApi";
+import { DYNASTY_BY_KEY, DYNASTIES } from "../data/dynasties";
+import {
+  halfIndexAuto,
+  pullByIndex,
+  pulledFromIndex,
+  textBabelIndex,
+  anyTextIndex,
+  type HalfIndex,
+  type IndexPoem,
+  type PullForm,
+} from "../engine/engineApi";
+import type { FormId } from "../engine/engine";
 import { useStore } from "../state/store";
 import { poetPosition } from "../three/PoetStars";
 import { CopyButton } from "./CopyButton";
@@ -11,36 +21,71 @@ const FORM_LABEL: Record<string, string> = {
   qijue: "七绝",
   wulu: "五律",
   qilu: "七律",
-  ziyou: "自由", // 自由 ≡ the arbitrary-length catalog (covers 词/新诗/古体, any length)
+  ziyou: "自由",
 };
-const REV_FORMS: PullForm[] = ["wujue", "qijue", "wulu", "qilu", "ziyou"];
-type Tab = "poet" | "line" | "index";
+const COMPOSE_FORMS: PullForm[] = ["wujue", "qijue", "wulu", "qilu", "ziyou"];
+// rows × chars-per-line for the fill-in grid (the user types chars, the engine computes the 编号)
+const GRID: Record<string, { rows: number; cols: number }> = {
+  wujue: { rows: 4, cols: 5 },
+  qijue: { rows: 4, cols: 7 },
+  wulu: { rows: 8, cols: 5 },
+  qilu: { rows: 8, cols: 7 },
+};
+const MAJOR = DYNASTIES.filter((d) => d.major).map((d) => d.key);
+
+type Tab = "poet" | "line" | "compose" | "dynasty";
+type RealHit = { name: string; title: string } | null;
+
+// Does the typed poem happen to be a REAL corpus poem? (loop closure — same check the reverse used.)
+async function findReal(lines: string[]): Promise<RealHit> {
+  if (!lines.length || !lines[0]) return null;
+  const text = lines.join("");
+  const hits = await searchByLine(lines[0]);
+  for (const h of hits.slice(0, 6)) {
+    const poems = await loadPoetPoems(h.poetId);
+    if (poems[h.poemIdx]?.p.join("") === text) return { name: h.poet?.name ?? "佚名", title: h.title || "无题" };
+  }
+  return null;
+}
 
 export function SearchPanel() {
   const [tab, setTab] = useState<Tab>("poet");
+  const [collapsed, setCollapsed] = useState(false);
   const [q, setQ] = useState("");
   const [results, setResults] = useState<PoetRow[]>([]);
   const [hits, setHits] = useState<LineHit[]>([]);
   const [half, setHalf] = useState<HalfIndex | null>(null);
-  // 编号 reverse-search tab
-  const [revForm, setRevForm] = useState<PullForm>("wujue");
+
+  // 造诗 tab: compose (fill chars → 编号) or reverse (编号 → 诗)
+  const [composeForm, setComposeForm] = useState<PullForm>("wujue");
+  const [composeDir, setComposeDir] = useState<"make" | "reverse">("make");
+  const [cells, setCells] = useState<string[]>([]); // grid chars (fixed forms)
+  const [freeText, setFreeText] = useState(""); // 自由: one line per textarea row
+  const [made, setMade] = useState<{ lines: string[]; index: string; digits: number; chars: number } | null>(null);
+  const [madeReal, setMadeReal] = useState<RealHit>(null);
   const [idxInput, setIdxInput] = useState("");
   const [rev, setRev] = useState<IndexPoem | null>(null);
-  const [revReal, setRevReal] = useState<{ name: string; title: string } | null>(null);
+  const [revReal, setRevReal] = useState<RealHit>(null);
+
   const selectPoet = useStore((s) => s.selectPoet);
   const selectPoem = useStore((s) => s.selectPoem);
   const setFlyTarget = useStore((s) => s.setFlyTarget);
+  // dynasty filter (merged in — no separate legend box)
+  const hidden = useStore((s) => s.hidden);
+  const toggleDynasty = useStore((s) => s.toggleDynasty);
+  const showAll = useStore((s) => s.showAllDynasties);
+  const showOnly = useStore((s) => s.showOnly);
+
   const reqRef = useRef(0);
+  const madeReqRef = useRef(0);
   const revReqRef = useRef(0);
 
-  // 定位虚空: a known index has ONE fixed canonical point in the void (engine's preset
-  // coordinate map, pointForBabelIndex). Drop the camera onto it and light the star — the
-  // same flare marker a void click makes — so 编号/半编号 feels like a place, not just a number.
+  // 定位虚空: a known index has ONE fixed canonical point — fly there + light the flare marker.
   function locateInVoid(form: PullForm, indexStr: string) {
     const poem = pulledFromIndex(form, indexStr);
     if (!poem) return;
-    selectPoem(poem); // flare marker at poem.pos (LOCAL canonical point; rotates with the galaxy)
-    setFlyTarget(poem.pos); // fly there — camera + marker share the spin, so it lands on the star
+    selectPoem(poem);
+    setFlyTarget(poem.pos);
   }
 
   function onChangePoet(v: string) {
@@ -49,38 +94,9 @@ export function SearchPanel() {
   }
   function onChangeLine(v: string) {
     setQ(v);
-    setHalf(halfIndexAuto(v)); // instant, no fetch — the 半编号 of this opening
+    setHalf(halfIndexAuto(v));
     const token = ++reqRef.current;
-    searchByLine(v).then((h) => {
-      if (reqRef.current === token) setHits(h);
-    });
-  }
-  // unrank the index → poem, then check (async) whether it happens to be a REAL poem (loop closure)
-  function runReverse(form: PullForm, v: string) {
-    const r = pullByIndex(form, v);
-    setRev(r);
-    setRevReal(null);
-    if (r?.inRange && form !== "ziyou" && r.lines.length) {
-      const token = ++revReqRef.current;
-      const text = r.lines.join("");
-      searchByLine(r.lines[0]).then(async (hits) => {
-        for (const h of hits.slice(0, 6)) {
-          const poems = await loadPoetPoems(h.poetId);
-          if (poems[h.poemIdx]?.p.join("") === text) {
-            if (revReqRef.current === token) setRevReal({ name: h.poet?.name ?? "佚名", title: h.title || "无题" });
-            return;
-          }
-        }
-      });
-    }
-  }
-  function onChangeIndex(v: string) {
-    setIdxInput(v);
-    runReverse(revForm, v);
-  }
-  function pickRevForm(f: PullForm) {
-    setRevForm(f);
-    if (idxInput) runReverse(f, idxInput);
+    searchByLine(v).then((h) => reqRef.current === token && setHits(h));
   }
 
   function goPoet(p: PoetRow, focus?: { poemIdx: number; title: string; firstLine: string }) {
@@ -94,57 +110,120 @@ export function SearchPanel() {
     goPoet(h.poet, { poemIdx: h.poemIdx, title: h.title, firstLine: h.firstLine });
   }
 
+  // ── 造诗·填字 → 编号 ──────────────────────────────────────────────────────
+  // Recompute the catalog 编号 from the chars the user typed (fixed grid, or 自由 lines). No number
+  // math by the user — they write a poem, the engine reports its address (+ whether it's a real poem).
+  function recomputeMake(form: PullForm, gridCells: string[], free: string) {
+    setMadeReal(null);
+    if (form === "ziyou") {
+      const lines = free.split("\n").map((l) => l.trim()).filter(Boolean);
+      const r = anyTextIndex(lines);
+      if (!r) return setMade(null);
+      setMade({ lines, index: r.index, digits: r.digits, chars: r.chars });
+      const token = ++madeReqRef.current;
+      findReal(lines).then((hit) => madeReqRef.current === token && setMadeReal(hit));
+      return;
+    }
+    const g = GRID[form];
+    const chars = gridCells.slice(0, g.rows * g.cols);
+    if (chars.length < g.rows * g.cols || chars.some((c) => !c)) return setMade(null); // not full yet
+    const han = chars.join("");
+    const r = textBabelIndex(form as FormId, han);
+    if (!r) return setMade(null); // some char not in 字库
+    const lines: string[] = [];
+    for (let i = 0; i < g.rows; i++) lines.push(chars.slice(i * g.cols, (i + 1) * g.cols).join(""));
+    setMade({ lines, index: r.index, digits: r.digits, chars: han.length });
+    const token = ++madeReqRef.current;
+    findReal(lines).then((hit) => madeReqRef.current === token && setMadeReal(hit));
+  }
+  function pickComposeForm(f: PullForm) {
+    setComposeForm(f);
+    setMade(null);
+    setMadeReal(null);
+    setRev(null); // clear the other direction's stale poem so its form/label never mismatches
+    setRevReal(null);
+    if (composeDir === "make") recomputeMake(f, cells, freeText);
+    else if (idxInput) runReverse(f, idxInput);
+  }
+  function setCell(i: number, v: string) {
+    const ch = [...v].slice(-1)[0] ?? ""; // keep only the last char typed
+    const next = cells.slice();
+    while (next.length <= i) next.push("");
+    next[i] = ch;
+    setCells(next);
+    recomputeMake(composeForm, next, freeText);
+  }
+  function onFreeText(v: string) {
+    setFreeText(v);
+    recomputeMake(composeForm, cells, v);
+  }
+
+  // ── 造诗·凭编号 → 诗 (reverse) ────────────────────────────────────────────
+  function runReverse(form: PullForm, v: string) {
+    const r = pullByIndex(form, v);
+    setRev(r);
+    setRevReal(null);
+    if (r?.inRange && form !== "ziyou" && r.lines.length) {
+      const token = ++revReqRef.current;
+      findReal(r.lines).then((hit) => revReqRef.current === token && setRevReal(hit));
+    }
+  }
+  function onChangeIndex(v: string) {
+    setIdxInput(v);
+    runReverse(composeForm, v);
+  }
+
   function switchTab(t: Tab) {
     setTab(t);
     setQ("");
     setResults([]);
     setHits([]);
     setHalf(null);
-    setIdxInput("");
-    setRev(null);
-    setRevReal(null);
   }
 
+  const g = composeForm !== "ziyou" ? GRID[composeForm] : null;
+
   return (
-    <div className="search">
+    <div className={collapsed ? "search collapsed" : "search"}>
       <div className="search-tabs">
-        <button className={tab === "poet" ? "stab on" : "stab"} onClick={() => switchTab("poet")}>
-          诗人
-        </button>
-        <button className={tab === "line" ? "stab on" : "stab"} onClick={() => switchTab("line")}>
-          诗句
-        </button>
-        <button className={tab === "index" ? "stab on" : "stab"} onClick={() => switchTab("index")}>
-          编号反查
+        <button className={tab === "poet" ? "stab on" : "stab"} onClick={() => switchTab("poet")}>诗人</button>
+        <button className={tab === "line" ? "stab on" : "stab"} onClick={() => switchTab("line")}>诗句</button>
+        <button className={tab === "compose" ? "stab on" : "stab"} onClick={() => switchTab("compose")}>造诗</button>
+        <button className={tab === "dynasty" ? "stab on" : "stab"} onClick={() => switchTab("dynasty")}>朝代</button>
+        <button className="stab collapse" onClick={() => setCollapsed((c) => !c)} title={collapsed ? "展开" : "收起"}>
+          {collapsed ? "▾" : "▴"}
         </button>
       </div>
 
-      {tab !== "index" && (
+      {!collapsed && (tab === "poet" || tab === "line") && (
         <input
           value={q}
-          placeholder={tab === "poet" ? "搜索诗人…" : "输入一句诗,如 床前明月光"}
+          placeholder={tab === "poet" ? "搜索诗人…（回车飞到第一个）" : "输入一句诗,如 床前明月光（回车定位）"}
           onChange={(e) => (tab === "poet" ? onChangePoet(e.target.value) : onChangeLine(e.target.value))}
+          onKeyDown={(e) => {
+            if (e.key !== "Enter") return;
+            if (tab === "poet" && results[0]) goPoet(results[0]);
+            else if (tab === "line" && hits[0]) goHit(hits[0]);
+          }}
           spellCheck={false}
         />
       )}
 
-      {tab === "poet" && results.length > 0 && (
+      {!collapsed && tab === "poet" && results.length > 0 && (
         <div className="search-results">
           {results.map((p) => {
             const dyn = DYNASTY_BY_KEY[p.dynasty];
             return (
               <button key={p.id} className="search-row" onClick={() => goPoet(p)}>
                 <span className="sr-name">{p.name}</span>
-                <span className="sr-meta">
-                  {dyn?.label ?? p.dynasty} · {p.poemCount}首
-                </span>
+                <span className="sr-meta">{dyn?.label ?? p.dynasty} · {p.poemCount}首</span>
               </button>
             );
           })}
         </div>
       )}
 
-      {tab === "line" && half && (
+      {!collapsed && tab === "line" && half && (
         <div className="line-results">
           {hits.length > 0 && (
             <div className="lr-section">
@@ -154,29 +233,20 @@ export function SearchPanel() {
                 return (
                   <button key={i} className="search-row" onClick={() => goHit(h)} disabled={!h.poet}>
                     <span className="sr-name">
-                      {h.poet?.name ?? "佚名"}
-                      <span className="sr-title">《{h.title || "无题"}》</span>
+                      {h.poet?.name ?? "佚名"}<span className="sr-title">《{h.title || "无题"}》</span>
                     </span>
-                    <span className="sr-meta">
-                      {dyn?.label ?? ""} · {FORM_LABEL[h.form] ?? "古体"}
-                    </span>
+                    <span className="sr-meta">{dyn?.label ?? ""} · {FORM_LABEL[h.form] ?? "古体"}</span>
                   </button>
                 );
               })}
             </div>
           )}
           <div className="lr-section">
-            <div className="lr-head">
-              纯随机 · 半编号
-              <CopyButton text={half.index} />
-            </div>
+            <div className="lr-head">纯随机 · 半编号<CopyButton text={half.index} /></div>
             <div className="half-note">
               若作为《{FORM_LABEL[half.form]}》开头,前 {half.locked} 字锁定了高位编号:
             </div>
             <div className="half-idx full">{half.index}</div>
-            <div className="half-note dim">
-              余 {half.freeChars} 字自由 → 这个开头下共有 字库<sup>{half.freeChars}</sup> 首诗,全在诗云的同一条高位街区里。
-            </div>
             <button className="locate-btn" onClick={() => locateInVoid(half.form, half.index)}>
               🛸 飞到这条高位街区 · 点亮代表星
             </button>
@@ -184,63 +254,155 @@ export function SearchPanel() {
         </div>
       )}
 
-      {tab === "index" && (
+      {!collapsed && tab === "compose" && (
         <div className="line-results">
           <div className="lr-section">
-            <div className="lr-head">选诗体</div>
             <div className="rev-forms">
-              {REV_FORMS.map((f) => (
-                <button
-                  key={f}
-                  className={revForm === f ? "seg-btn on" : "seg-btn"}
-                  onClick={() => pickRevForm(f)}
-                >
+              {COMPOSE_FORMS.map((f) => (
+                <button key={f} className={composeForm === f ? "seg-btn on" : "seg-btn"} onClick={() => pickComposeForm(f)}>
                   {FORM_LABEL[f]}
                 </button>
               ))}
             </div>
+            <div className="compose-dir">
+              <button
+                className={composeDir === "make" ? "seg-btn on" : "seg-btn"}
+                onClick={() => setComposeDir("make")}
+              >
+                填字 → 编号
+              </button>
+              <button
+                className={composeDir === "reverse" ? "seg-btn on" : "seg-btn"}
+                onClick={() => setComposeDir("reverse")}
+              >
+                凭编号 → 诗
+              </button>
+            </div>
           </div>
-          <div className="lr-section">
-            <div className="lr-head">粘贴编号 · 反查它是哪首诗</div>
-            <textarea
-              className="idx-input"
-              value={idxInput}
-              placeholder={
-                revForm === "ziyou"
-                  ? "粘贴一个自由编号（任意长；新诗/古体在诗人面板里可复制）…"
-                  : "粘贴一个全集编号（纯数字）…例如先在「诗句」里搜一句、复制其编号"
-              }
-              onChange={(e) => onChangeIndex(e.target.value)}
-              spellCheck={false}
-              rows={3}
-            />
-            {rev &&
-              (rev.inRange ? (
+
+          {composeDir === "make" && (
+            <div className="lr-section">
+              {g ? (
+                <>
+                  <div className="lr-head">逐字填诗（{g.rows} 行 × {g.cols} 字）</div>
+                  <div className="compose-grid" style={{ gridTemplateColumns: `repeat(${g.cols}, 1fr)` }}>
+                    {Array.from({ length: g.rows * g.cols }, (_, i) => (
+                      <input
+                        key={i}
+                        className="cell"
+                        value={cells[i] ?? ""}
+                        maxLength={2}
+                        onChange={(e) => setCell(i, e.target.value)}
+                        spellCheck={false}
+                      />
+                    ))}
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="lr-head">自由填诗（回车换行,空行忽略）</div>
+                  <textarea
+                    className="idx-input"
+                    value={freeText}
+                    placeholder={"每行一句,如:\n你\n我\n爱世界\n爱Claude"}
+                    onChange={(e) => onFreeText(e.target.value)}
+                    spellCheck={false}
+                    rows={5}
+                  />
+                </>
+              )}
+              {made ? (
                 <div className="rev-poem">
                   <div className="poem-body" lang="zh">
-                    {rev.lines.map((l, i) => (
-                      <div className={rev.form === "ziyou" ? "poem-line wrap" : "poem-line"} key={i}>
+                    {made.lines.map((l, i) => (
+                      <div className={composeForm === "ziyou" ? "poem-line wrap" : "poem-line"} key={i}>
                         {l}
+                        {composeForm === "ziyou" ? (i === made.lines.length - 1 ? "。" : "，") : ""}
                       </div>
                     ))}
                   </div>
-                  <button className="locate-btn" onClick={() => locateInVoid(rev.form, rev.index)}>
+                  <div className="lr-head">
+                    {FORM_LABEL[composeForm] === "自由" ? "自由目录编号" : "全集编号"} · {made.digits} 位
+                    <CopyButton text={made.index} />
+                  </div>
+                  <div className="half-idx full">{made.index}</div>
+                  <button className="locate-btn" onClick={() => locateInVoid(composeForm, made.index)}>
                     🛸 定位虚空 · 飞过去点亮这首诗
                   </button>
-                  {revReal && (
-                    <div className="rev-real">
-                      🎯 这串编号正好对应一首真实存在的诗：{revReal.name}《{revReal.title}》
-                    </div>
+                  {madeReal && (
+                    <div className="rev-real">🎯 这正好是一首真实存在的诗:{madeReal.name}《{madeReal.title}》</div>
                   )}
-                  <div className="half-note dim">
-                    这是《{FORM_LABEL[rev.form]}》全集目录里正序第 {rev.digits} 位长的那一号 —— 同一个编号永远算出同一首诗。
-                  </div>
                 </div>
               ) : (
                 <div className="half-note dim">
-                  此编号超出《{FORM_LABEL[rev.form]}》目录范围（该目录约 {rev.cardinalityDigits} 位数那么多首）。换个诗体试试。
+                  {composeForm === "ziyou"
+                    ? "输入至少一句中文,即算出它的自由编号。"
+                    : "把格子填满中文字(都在字库内),就会算出这首诗的全集编号。"}
                 </div>
-              ))}
+              )}
+            </div>
+          )}
+
+          {composeDir === "reverse" && (
+            <div className="lr-section">
+              <div className="lr-head">粘贴编号 · 反查它是哪首《{FORM_LABEL[composeForm]}》</div>
+              <textarea
+                className="idx-input"
+                value={idxInput}
+                placeholder={composeForm === "ziyou" ? "粘贴一个自由编号(任意长)…" : "粘贴一个全集编号(纯数字)…"}
+                onChange={(e) => onChangeIndex(e.target.value)}
+                spellCheck={false}
+                rows={3}
+              />
+              {rev &&
+                (rev.inRange ? (
+                  <div className="rev-poem">
+                    <div className="poem-body" lang="zh">
+                      {rev.lines.map((l, i) => (
+                        <div className={rev.form === "ziyou" ? "poem-line wrap" : "poem-line"} key={i}>{l}</div>
+                      ))}
+                    </div>
+                    <button className="locate-btn" onClick={() => locateInVoid(rev.form, rev.index)}>
+                      🛸 定位虚空 · 飞过去点亮这首诗
+                    </button>
+                    {revReal && (
+                      <div className="rev-real">🎯 这串编号正好对应一首真实存在的诗:{revReal.name}《{revReal.title}》</div>
+                    )}
+                  </div>
+                ) : (
+                  <div className="half-note dim">
+                    此编号超出《{FORM_LABEL[composeForm]}》目录范围(约 {rev.cardinalityDigits} 位)。换个诗体试试。
+                  </div>
+                ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {!collapsed && tab === "dynasty" && (
+        <div className="line-results">
+          <div className="lr-section">
+            <div className="legend-presets">
+              <button onClick={showAll}>全部</button>
+              <button onClick={() => showOnly(MAJOR)}>主要</button>
+              <button onClick={() => showOnly(["tang", "wudai", "song"])}>唐宋</button>
+            </div>
+            <div className="legend-list">
+              {DYNASTIES.map((d) => {
+                const off = hidden.has(d.key);
+                return (
+                  <button
+                    key={d.key}
+                    className={off ? "legend-row off" : "legend-row"}
+                    onClick={() => toggleDynasty(d.key)}
+                    title={off ? "显示" : "隐藏"}
+                  >
+                    <span className="dot" style={{ background: d.color }} />
+                    <span className="legend-label">{d.label}</span>
+                  </button>
+                );
+              })}
+            </div>
           </div>
         </div>
       )}

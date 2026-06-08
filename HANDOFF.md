@@ -132,7 +132,29 @@ node pipeline/build-lexicon.mjs                            # lexicon.json (needs
 
 ## 6. Remaining work (next, roughly in priority)
 
-**DONE — GPU-pick + Range-fetch session (latest; verified: build + 53/53 + e2e DOM on a real GPU):**
+**DONE — UX iteration round 2 (latest; verified: build + 53/53 + e2e DOM):**
+- ✅ **造诗 (compose) tab** — the intuitive forward direction: pick a form → for 五/七绝/律 a **fill-in
+  grid** of single-char cells, for **自由** a textarea (回车换行), and the engine reports the catalog
+  编号 as you type (`textBabelIndex` / `anyTextIndex`) — no number-guessing. A `填字→编号 / 凭编号→诗`
+  toggle keeps the old reverse lookup. It even flags when your poem is a REAL corpus poem (`findReal`).
+  e2e: 静夜思 grid → 81-位 全集编号; `你/我/爱世界/…` → `你，我，爱世界，…。` + 102-位 自由编号.
+- ✅ **Enter to act** — 诗句 / 诗人 inputs fly to / open the top hit on Enter.
+- ✅ **UI consolidation + screenshot mode** — the floating dynasty legend is gone; it's now the **朝代
+  tab** inside the one search panel (collapsible via ▴/▾). A corner **隐藏界面** button + the **H** hotkey
+  hide ALL overlay UI for clean screenshots (`store.uiHidden`, `App` keydown). 
+- ✅ **PoetPanel = title drawer / accordion** — shows poem **titles** only (50/page, 显示更多), each with a
+  lazy **复制编号**; click a title to expand its content + full 编号. The (large-BigInt) 编号 is computed
+  **lazily per poem** (`idxCache` ref) on expand/copy — not for the whole list. Much lighter + cleaner.
+- ✅ **Diffuse galaxy core** — the central bulge is now a wider, jittered, noise-clumped, **softer/dimmer**
+  particle cloud (+ a stronger smooth halo) so the centre reads as blurred, disordered white haze (real-
+  galaxy core) instead of a regular dot-ball; the ORDERED poet/arm layer outside carries the map's logic.
+  `Galaxy.tsx` bulge params — *tune on a real GPU.*
+- ✅ **Void-pull marker is findable** — a fresh pull now **flashes large + bright** (like a nearby
+  decoration star) the instant you click, then shrinks/dims to the quiet marker (`PulledStars` `aFlare`
+  size-flare + brighter birth); 定位虚空 reuses it. The misleading centre **crosshair sprite was removed**
+  (it conflicted with the real cursor — picking is at the cursor, not screen centre).
+
+**DONE — GPU-pick + Range-fetch session (verified: build + 53/53 + e2e DOM on a real GPU):**
 - ✅ **GPU colour-ID picking (#0, top priority)** — `three/gpuPick.ts`. Each poet's index is colour-encoded
   into an `aPickColor` vertex attribute (shared on the PoetStars geometry, so the dynasty-filter aSize
   writes exclude hidden poets from picks for free). On a hover/click the picker renders ONLY an n×n window

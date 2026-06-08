@@ -34,10 +34,12 @@ export function PulledStars() {
     const pos = new Float32Array(MAXBUF * 3);
     const col = new Float32Array(MAXBUF * 3);
     const pha = new Float32Array(MAXBUF);
+    const fla = new Float32Array(MAXBUF); // birth-flare amount (0..~3), decays — drives the size flash
     const g = new THREE.BufferGeometry();
     g.setAttribute("position", new THREE.BufferAttribute(pos, 3).setUsage(THREE.DynamicDrawUsage));
     g.setAttribute("aColor", new THREE.BufferAttribute(col, 3).setUsage(THREE.DynamicDrawUsage));
     g.setAttribute("aPhase", new THREE.BufferAttribute(pha, 1).setUsage(THREE.DynamicDrawUsage));
+    g.setAttribute("aFlare", new THREE.BufferAttribute(fla, 1).setUsage(THREE.DynamicDrawUsage));
     g.setDrawRange(0, 0);
     const m = new THREE.ShaderMaterial({
       transparent: true,
@@ -45,12 +47,14 @@ export function PulledStars() {
       blending: THREE.AdditiveBlending,
       uniforms: { uTime: { value: 0 } },
       vertexShader: /* glsl */ `
-        attribute vec3 aColor; attribute float aPhase;
+        attribute vec3 aColor; attribute float aPhase; attribute float aFlare;
         uniform float uTime; varying vec3 vColor;
         void main() {
           vec4 mv = modelViewMatrix * vec4(position, 1.0);
-          float tw = 0.78 + 0.22 * sin(uTime * 3.0 + aPhase * 6.2831853);
-          gl_PointSize = clamp(240.0 / -mv.z, 2.5, 14.0) * tw;
+          float tw = 0.82 + 0.18 * sin(uTime * 3.0 + aPhase * 6.2831853);
+          // birth swell: a fresh pull POPS large+bright (like a nearby decoration star, so it's easy
+          // to spot the instant you click), then shrinks to a small quiet marker as aFlare decays.
+          gl_PointSize = clamp((520.0 + aFlare * 4500.0) / -mv.z, 3.5, 64.0) * tw;
           gl_Position = projectionMatrix * mv;
           vColor = aColor;
         }`,
@@ -67,7 +71,7 @@ export function PulledStars() {
     });
     const pts = new THREE.Points(g, m);
     pts.frustumCulled = false;
-    return { pts, g, pos, col, pha, m };
+    return { pts, g, pos, col, pha, fla, m };
   }, []);
 
   useFrame((_, dt) => {
@@ -117,11 +121,11 @@ export function PulledStars() {
         alpha = Math.min(1, (t - m.birth) / FADE_IN);
       }
       const c = m.valid ? [1.0, 0.84, 0.4] : [0.78, 0.86, 1.0];
-      // birth flare: a bright highlight on the first click that holds briefly then LINEARLY
-      // settles to the quiet base. Brightness only (size stays small) so it never becomes a
-      // giant ball — bloom turns the flash into a soft glow.
-      const flare = 1 + 3.0 * Math.max(0, 1 - (t - m.birth) / 2.5);
-      const b = alpha * 1.9 * flare;
+      // birth flare: a fresh pull flashes BRIGHT + LARGE for the first instant (so you spot it
+      // immediately even when it lands far ahead), then both brightness and size settle to the
+      // quiet marker. Bloom turns the flash into a soft glow. (定位虚空 reuses this same marker.)
+      const flareT = Math.max(0, 1 - (t - m.birth) / 2.2); // 1 at birth → 0 by 2.2 s
+      const b = alpha * 2.0 * (1 + 4.0 * flareT);
       const [wx, wz] = spinXZ(m.pos[0], m.pos[2]); // LOCAL → WORLD (galaxy spin)
       obj.pos[n * 3] = wx;
       obj.pos[n * 3 + 1] = m.pos[1];
@@ -130,12 +134,14 @@ export function PulledStars() {
       obj.col[n * 3 + 1] = c[1] * b;
       obj.col[n * 3 + 2] = c[2] * b;
       obj.pha[n] = (m.id % 100) / 100;
+      obj.fla[n] = flareT * 3.0; // size flash boost (0..3), decays with flareT
       n++;
     }
     obj.g.setDrawRange(0, n);
     obj.g.attributes.position.needsUpdate = true;
     obj.g.attributes.aColor.needsUpdate = true;
     (obj.g.attributes.aPhase as THREE.BufferAttribute).needsUpdate = true;
+    (obj.g.attributes.aFlare as THREE.BufferAttribute).needsUpdate = true;
   });
 
   return <primitive object={obj.pts} />;

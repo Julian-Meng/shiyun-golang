@@ -30,6 +30,8 @@ interface State {
   showGifts: boolean;
   // render quality (scales galaxy particle counts + bloom for weak GPUs)
   quality: "high" | "low";
+  // hide ALL overlay UI (screenshot mode) — toggled by a corner button + the H hotkey
+  uiHidden: boolean;
   // camera
   gravity: boolean; // when inside the galaxy, co-rotate the camera with the spin (stars hold still)
   speed: number; // multiplier
@@ -51,6 +53,7 @@ interface State {
   toggleGifts: () => void;
   toggleQuality: () => void;
   toggleGravity: () => void;
+  toggleUI: () => void;
   setSpeed: (s: number) => void;
   setFlyTarget: (t: [number, number, number] | null) => void;
 }
@@ -73,6 +76,7 @@ export const useStore = create<State>((set) => ({
   poetFocus: null,
   showGifts: false,
   quality: "high",
+  uiHidden: false,
   gravity: true,
   speed: 1,
   flyTarget: null,
@@ -107,6 +111,7 @@ export const useStore = create<State>((set) => ({
   toggleGifts: () => set((s) => ({ showGifts: !s.showGifts })),
   toggleQuality: () => set((s) => ({ quality: s.quality === "high" ? "low" : "high" })),
   toggleGravity: () => set((s) => ({ gravity: !s.gravity })),
+  toggleUI: () => set((s) => ({ uiHidden: !s.uiHidden })),
   setSpeed: (speed) => set({ speed }),
   setFlyTarget: (flyTarget) => set({ flyTarget }),
 }));

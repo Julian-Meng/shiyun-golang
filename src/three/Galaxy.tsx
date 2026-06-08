@@ -68,17 +68,23 @@ export function Galaxy() {
       let x: number, y: number, z: number, t: number, armProx = 0, bright: number, hii = false;
 
       if (isBulge) {
-        // dense, round, steep-exponential core
-        const rr = expR(R * 0.05, R * 0.22);
+        // DIFFUSE, irregular core haze — NOT a tight regular dot-ball. A wider, softer exponential
+        // cloud + jitter + noise-driven density so the centre reads as blurred, disordered nebulosity
+        // (like a real galaxy's core) rather than a structured grid of white dots. The ORDERED poet
+        // + arm layer outside is what should carry the map's "logic"; the core is just a white haze.
+        const rr = expR(R * 0.085, R * 0.34); // less steep + larger cap → spread out, not a hard ball
         t = rr / R;
         const phi = rnd() * Math.PI * 2;
         const ct = 2 * rnd() - 1; // cos(theta) for a (flattened) sphere
         const st = Math.sqrt(Math.max(0, 1 - ct * ct));
-        x = rr * st * Math.cos(phi);
-        z = rr * st * Math.sin(phi);
-        y = rr * ct * 0.55; // slightly flattened
-        armProx = 0.25;
-        bright = (1.15 - t * 1.2) * (0.7 + rnd() * 0.5);
+        x = rr * st * Math.cos(phi) + R * 0.05 * (rnd() - 0.5); // jitter → irregular, not a clean shell
+        z = rr * st * Math.sin(phi) + R * 0.05 * (rnd() - 0.5);
+        y = rr * ct * 0.6 + R * 0.03 * (rnd() - 0.5);
+        armProx = 0.2;
+        // dimmer per-particle so additive overlap accumulates into SMOOTH haze (no grainy bright
+        // dots), with value-noise clumping so the density is uneven/disordered.
+        const nz = vnoise(x * NF * 1.6, z * NF * 1.6);
+        bright = (0.72 - t * 0.85) * (0.55 + rnd() * 0.5) * (0.65 + nz * 0.8);
       } else {
         // disk: spiral arm population on an exponential radius
         const rr = expR(R * 0.27, R) + R * 0.015;
@@ -114,9 +120,10 @@ export function Galaxy() {
       col[i * 3 + 1] = c.g * bright;
       col[i * 3 + 2] = c.b * bright;
 
-      // sizes: dust tiny, stars larger/sparser, bulge medium; HII a touch bigger
+      // sizes: dust tiny, stars larger/sparser; bulge LARGER + softer so its particles blur together
+      // into continuous haze instead of resolving as discrete dots; HII a touch bigger
       scale[i] = isBulge
-        ? (0.7 + (0.25 - t) * 2.0) * (0.7 + rnd() * 0.6)
+        ? (1.5 + (0.3 - t) * 2.6) * (0.7 + rnd() * 0.7)
         : isStar
           ? (0.7 + armProx * 0.8 + (hii ? 0.8 : 0)) * (0.7 + rnd() * 0.6) // smaller decoration stars
           : (0.5 + (1 - t) * 0.8) * (0.7 + rnd() * 0.5); // dust a touch larger to keep the haze full
@@ -169,10 +176,10 @@ export function Galaxy() {
         transparent: true,
         depthWrite: false,
         blending: THREE.AdditiveBlending,
-        opacity: 0.18,
+        opacity: 0.24, // a touch stronger so the smooth core glow comes from haze, not bright dots
       }),
     );
-    halo.scale.set(R * 0.95, R * 0.95, 1);
+    halo.scale.set(R * 1.05, R * 1.05, 1);
     grp.add(halo);
 
     // faint far star dome

@@ -28,32 +28,9 @@ body,
 }
 canvas {
   display: block;
+  /* the OS crosshair cursor sits at the actual click/aim point — no separate centre sprite (that
+     conflicted with the real cursor; picking happens at the cursor, not screen centre). */
   cursor: crosshair;
-}
-
-/* center crosshair */
-.crosshair {
-  position: fixed;
-  left: 50%;
-  top: 50%;
-  width: 14px;
-  height: 14px;
-  transform: translate(-50%, -50%);
-  border: 1px solid rgba(255, 210, 122, 0.55);
-  border-radius: 50%;
-  pointer-events: none;
-  z-index: 15;
-}
-.crosshair::after {
-  content: "";
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  width: 2px;
-  height: 2px;
-  background: var(--gold);
-  transform: translate(-50%, -50%);
-  border-radius: 50%;
 }
 
 /* floating poet labels (drei Html) */
@@ -695,9 +672,9 @@ canvas {
 .poem-list {
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 2px;
   border-top: 1px solid rgba(255, 255, 255, 0.08);
-  padding-top: 12px;
+  padding-top: 8px;
 }
 .poem-item {
   display: flex;
@@ -748,6 +725,155 @@ canvas {
   font-size: 11px;
   color: var(--muted);
   text-align: center;
+}
+
+/* hide-all-UI (screenshot) button */
+.ui-hide-btn {
+  position: fixed;
+  right: 16px;
+  bottom: 14px;
+  z-index: 30;
+  background: rgba(8, 10, 18, 0.6);
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  color: var(--muted);
+  font-size: 12px;
+  padding: 6px 12px;
+  border-radius: 8px;
+  cursor: pointer;
+}
+.ui-hide-btn:hover {
+  color: var(--fg);
+  border-color: rgba(255, 210, 122, 0.4);
+}
+
+/* search panel collapse + 造诗 compose */
+.search.collapsed {
+  width: auto;
+}
+.stab.collapse {
+  padding: 4px 11px;
+}
+.compose-dir {
+  display: flex;
+  gap: 6px;
+  padding: 0 14px 6px;
+}
+.compose-dir .seg-btn {
+  flex: 1;
+  text-align: center;
+}
+.compose-grid {
+  display: grid;
+  gap: 5px;
+  padding: 6px 14px 4px;
+}
+.compose-grid .cell {
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  text-align: center;
+  background: rgba(8, 10, 18, 0.7);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 6px;
+  color: #f1ede2;
+  font-family: var(--serif);
+  font-size: 18px;
+  outline: none;
+  padding: 0;
+}
+.compose-grid .cell:focus {
+  border-color: rgba(255, 210, 122, 0.6);
+  background: rgba(255, 210, 122, 0.08);
+}
+
+/* poet panel — title drawer / accordion */
+.pi-row {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  width: 100%;
+  background: none;
+  border: none;
+  padding: 6px 2px;
+  cursor: pointer;
+  text-align: left;
+  color: #cdd5e6;
+}
+.pi-row:hover {
+  color: var(--fg);
+}
+.pi-caret {
+  color: var(--muted);
+  font-size: 10px;
+  width: 10px;
+  flex: none;
+}
+.pi-row-spacer {
+  flex: 1;
+}
+.pi-detail {
+  padding: 2px 2px 8px 17px;
+  animation: rise 0.2s ease;
+}
+.pi-detail .pi-body {
+  text-align: left;
+}
+.pi-idx-block {
+  margin-top: 6px;
+}
+.pi-idx.dim {
+  color: var(--muted);
+  margin-top: 6px;
+}
+.more-btn {
+  width: 100%;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  color: var(--muted);
+  font-size: 12px;
+  padding: 7px;
+  cursor: pointer;
+  margin-top: 6px;
+}
+.more-btn:hover {
+  color: var(--gold);
+  border-color: rgba(255, 210, 122, 0.4);
+}
+
+/* thin, on-brand scrollbars (replaces the default chrome bars) */
+.poem-list,
+.search-results,
+.line-results,
+.poet-panel,
+.poem-panel {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 210, 122, 0.32) transparent;
+}
+.poem-list::-webkit-scrollbar,
+.search-results::-webkit-scrollbar,
+.line-results::-webkit-scrollbar,
+.poet-panel::-webkit-scrollbar,
+.poem-panel::-webkit-scrollbar {
+  width: 8px;
+}
+.poem-list::-webkit-scrollbar-thumb,
+.search-results::-webkit-scrollbar-thumb,
+.line-results::-webkit-scrollbar-thumb,
+.poet-panel::-webkit-scrollbar-thumb,
+.poem-panel::-webkit-scrollbar-thumb {
+  background: rgba(255, 210, 122, 0.28);
+  border-radius: 4px;
+}
+.poet-panel::-webkit-scrollbar-thumb:hover,
+.poem-panel::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 210, 122, 0.5);
+}
+.poem-list::-webkit-scrollbar-track,
+.line-results::-webkit-scrollbar-track,
+.poet-panel::-webkit-scrollbar-track,
+.poem-panel::-webkit-scrollbar-track {
+  background: transparent;
 }
 
 /* loading screen */
