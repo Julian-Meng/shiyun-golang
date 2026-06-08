@@ -39,7 +39,7 @@ thing that breaks the hosting model; all index math + render is client-side).
 | **Dynasty filter** | 15-dynasty legend (先秦→当代) + presets (全部/主要/唐宋). |
 | **自由格式 / 词** (5th form) | A separate variable-length catalog: alphabet = 字库 N real glyphs + a block of W≈N/5 "break" glyphs (radix N+W, length 28). Random pulls split into 词-like variable lines (~4.6 行 × ~5 字). Own 自由目录编号; composes with 常用字; never 格律. `engine.freeUnrank/freeRank/splitFree`. |
 | **诗句 content search** | 诗句 tab: type a line → **真实诗人** hit via the first-line index (床前明月光 → 李白《静夜思》, surfaced + highlighted in PoetPanel) **AND** the **半编号** — the high-order address the opening pins (verified: 静夜思's 81-digit 全集编号 *starts with* the 5-char 半编号). `engineApi.halfIndex/halfIndexAuto`, `load.searchByLine`. |
-| **赠诗网络** | HUD 赠诗 toggle → 4,341 same-dynasty dedication edges (寄/赠/和/次韵… title-parsed, name-matched). Selecting a poet lights up their往来. Committed `gifts.json` (110 KB). `three/GiftLines`. |
+| **赠诗网络** | HUD 赠诗 toggle → 3,397 dedication edges (寄/赠/和/次韵… title-parsed; greedy-longest name match + 号/字 alias 晦庵=朱熹; one edge per 兼寄 recipient). 元稹→白居易, 苏辙→苏轼, 黄庭坚→苏轼…. Selecting a poet lights up their往来. Committed `gifts.json` (86 KB). `three/GiftLines`. |
 
 Three pull modes to feel the project: plain random「牛蝛茙漂綵」→ 格律「趰㵎憣烔岆」→ 格律+常用字
 「思伦要锁馆」; plus 自由格式 for 词-like变行, and the 诗句 tab to find a real poem from one line.
@@ -104,8 +104,10 @@ node pipeline/build-lexicon.mjs                            # lexicon.json (needs
 2. ✅ **Content search** — first-line index `firstline/{bucket}.json` (256 shards by
    `fnv32(firstLine)&0xff`) + `load.searchByLine` (真实诗人) **and** `engine.prefixIndex` /
    `engineApi.halfIndex` (半编号, pure, always-on). 床前明月光 → 李白《静夜思》 verified.
-3. ✅ **赠诗 network** — `build-data.mjs` title parse (markers + known-name match, **same-dynasty
-   only** for precision) → committed `gifts.json` (4,341 edges) → `three/GiftLines` + HUD toggle.
+3. ✅ **赠诗 network** — `build-data.mjs` title parse (markers + greedy-longest name match with a
+   2-char completeness guard; bare names **same-dynasty only**, 号/字 **aliases** resolve across
+   dynasties; one edge per distinct 兼寄 recipient) → committed `gifts.json` (3,397 edges) →
+   `three/GiftLines` + HUD toggle.
 
 **Still TODO:**
 4. **Polish** — GPU-pick at scale, bloom (`@react-three/postprocessing`, check R3F version),

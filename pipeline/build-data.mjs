@@ -177,7 +177,7 @@ if (!SKIP_HEAVY)
   for (const [b, obj] of flBuckets) writeFileSync(join(OUT, "firstline", `${b}.json`), JSON.stringify(obj));
 
 // ── 赠诗 network: parse titles for 寄/赠/和/次韵… + a known poet NAME → poet→poet edges ──
-// name -> poets with that name (each {id, dynId, count}); pick target by dynasty proximity.
+// name -> poets with that name (each {id, dynId, count}).
 const DYN_ORDER = ["xianqin","qinhan","weijin","nanbeichao","sui","tang","wudai","song","liao","jin","yuan","ming","qing","jinxiandai","dangdai"];
 const dynId = (k) => { const i = DYN_ORDER.indexOf(k); return i < 0 ? 99 : i; };
 const byName = new Map();
@@ -186,56 +186,90 @@ for (const p of poets.values()) {
   if (!a) { a = []; byName.set(p.name, a); }
   a.push({ id: p.id, dynId: dynId(p.dynasty), count: p.count });
 }
-// resolve a candidate name to one poet in the SAME dynasty as the author (social networks
-// are overwhelmingly between contemporaries; cross-dynasty matches on a bare 2–3-char string
-// are nearly always a place / 字号 collision, and would draw lines across the whole galaxy).
-// Among same-dynasty namesakes pick the most prolific. Returns null if none qualify.
+
+// 字号/别称 → 本名: famous, near-unambiguous studio-names (号 collide far less than 字). When a
+// title names a poet by 号 (e.g. 晦庵 = 朱熹, 东坡 = 苏轼), redirect to the canonical poet —
+// otherwise the 号 either collides with a 1-poem namesake or misses the famous target entirely.
+const GIFT_ALIAS = {
+  东坡:"苏轼", 坡公:"苏轼", 苏长公:"苏轼", 子瞻:"苏轼",
+  半山:"王安石", 荆公:"王安石", 介甫:"王安石", 王介甫:"王安石",
+  山谷:"黄庭坚", 涪翁:"黄庭坚", 黄山谷:"黄庭坚",
+  晦庵:"朱熹", 紫阳:"朱熹", 朱晦庵:"朱熹",
+  遗山:"元好问", 元遗山:"元好问",
+  简斋:"陈与义", 后山:"陈师道", 诚斋:"杨万里", 石湖:"范成大", 淮海:"秦观",
+  少陵:"杜甫", 杜陵:"杜甫", 老杜:"杜甫", 香山:"白居易", 乐天:"白居易",
+  昌黎:"韩愈", 柳州:"柳宗元", 青莲:"李白", 谪仙:"李白", 醉翁:"欧阳修", 六一:"欧阳修",
+  易安:"李清照", 稼轩:"辛弃疾", 放翁:"陆游", 靖节:"陶渊明", 摩诘:"王维",
+};
+const isKnown = (s) => byName.has(s) || s in GIFT_ALIAS;
+// chars that legitimately END / follow a complete 2-char name: relations, counters, and the
+// leading char of an official title/role. So 王巩(end) / 张籍水部 / 王巩二首 are accepted, but a
+// truncated longer name (王介+甫, 张元+礼, 陈宗+谕) or surname+role (李道+士) is rejected.
+const NAME_END = new Set([
+  ..."兄弟姊妹翁叟丈郎公侯君卿氏见之韵作并同赴往行归还赋诗词书札时留别后其等",
+  ..."二三四五六七八九十首篇章绝律古绝",
+  ..."员中山道学舍补拾司刺太县长参博校正主录评大侍尚给秘著处居上法禅征使明少别判节观转提安经制宣枢翰谏起秀进尉丞簿",
+]);
+const isHan = (c) => c !== undefined && /[一-鿿]/.test(c);
+// greedy-longest known/alias name at cs[start]; a bare 2-char name must be COMPLETE (followed by
+// a name-ending char / punctuation / end) so a longer name or name+role isn't silently truncated.
+function nameAt(cs, start) {
+  for (const len of [4, 3, 2]) {
+    if (start + len > cs.length) continue;
+    const cand = cs.slice(start, start + len).join("");
+    if (GIFT_STOP.has(cand) || !isKnown(cand)) continue;
+    if (len === 2 && !(cand in GIFT_ALIAS)) {
+      const next = cs[start + len];
+      if (isHan(next) && !NAME_END.has(next)) continue; // looks mid-name → reject
+    }
+    return cand;
+  }
+  return null;
+}
+// find the dedicatee right after a marker (raw start, then after an honorific prefix, then +1).
+function findName(after) {
+  const win = [...after].slice(0, 8);
+  let n = nameAt(win, 0);
+  if (n) return n;
+  const stripped = [...win.join("").replace(HONORIFIC, "")];
+  if (stripped.length !== win.length) { n = nameAt(stripped, 0); if (n) return n; }
+  return nameAt(win, 1);
+}
+// resolve a name (or 号/字 alias) to a poet id. Bare names: SAME dynasty only (precision — a bare
+// namesake across dynasties is almost always a collision). Aliases: cross-dynasty allowed (the
+// reference is unambiguous — a 清人 和东坡 really means 苏轼). Pick the most prolific match.
 function resolveTarget(name, authorDynId, fromId) {
-  const cands = byName.get(name);
+  const aliased = name in GIFT_ALIAS;
+  const cands = byName.get(aliased ? GIFT_ALIAS[name] : name);
   if (!cands) return null;
   let best = null, bestCount = -1;
   for (const c of cands) {
-    if (c.id === fromId || c.dynId !== authorDynId) continue;
+    if (c.id === fromId) continue;
+    if (!aliased && c.dynId !== authorDynId) continue;
     if (c.count > bestCount) { bestCount = c.count; best = c; }
   }
   return best ? best.id : null;
 }
-// scan a title right after a marker for a known poet name. Prefer a 3-char full name (very
-// low collision) anchored at the marker; fall back to a 2-char name immediately after it.
-// `len2ok` gates the noisier 2-char fallback (only when no 3-char name is present).
-function findName(after) {
-  const win = [...after].slice(0, 6).join("");
-  const stripped = win.replace(HONORIFIC, "");
-  for (const probe of [stripped, win]) {
-    const cs = [...probe];
-    for (let s = 0; s <= 1 && s + 3 <= cs.length; s++) {
-      const cand = cs.slice(s, s + 3).join("");
-      if (!GIFT_STOP.has(cand) && byName.has(cand)) return cand;
-    }
-  }
-  for (const probe of [stripped, win]) {
-    const cs = [...probe];
-    const cand = cs.slice(0, 2).join(""); // 2-char only immediately after the marker
-    if (cand.length === 2 && !GIFT_STOP.has(cand) && byName.has(cand)) return cand;
-  }
-  return null;
-}
+// One edge per DISTINCT recipient per poem (兼寄/兼简/兼呈 → multiple). Scan ALL markers and ALL
+// their occurrences (no early break) so marker list-order can't drop the primary dedication.
 const edgeW = new Map(); // "from|to" -> weight
 for (const p of poets.values()) {
   const aDyn = dynId(p.dynasty);
   for (const poem of p.poems) {
     const title = poem.t;
     if (!title) continue;
+    const targets = new Set();
     for (const mk of GIFT_MARKERS) {
-      const at = title.indexOf(mk);
-      if (at < 0) continue;
-      const name = findName(title.slice(at + mk.length));
-      if (!name) continue;
-      const to = resolveTarget(name, aDyn, p.id);
-      if (!to) continue;
+      let from = 0, at;
+      while ((at = title.indexOf(mk, from)) >= 0) {
+        from = at + mk.length;
+        const name = findName(title.slice(at + mk.length));
+        if (name) { const to = resolveTarget(name, aDyn, p.id); if (to) targets.add(to); }
+      }
+    }
+    for (const to of targets) {
       const key = p.id + "|" + to;
       edgeW.set(key, (edgeW.get(key) || 0) + 1);
-      break; // one edge per poem (first matching marker wins)
     }
   }
 }

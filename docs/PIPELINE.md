@@ -61,11 +61,15 @@ firstline/{2-hex bucket}.json   {firstLine: [{p:poetId, i:poemIdx, t:title, f:fo
    first lines of length ≥ 2 only. 75 MB total → git-ignored, regenerate locally.
    Powers the 诗句 tab (load.searchByLine): 床前明月光 → 李白《静夜思》.
 gifts.json                       {version, edgeCount, edges:[[fromId,toId,weight]]}
-   赠诗 dedication network. For each title: find a GIFT_MARKER (寄/赠/和/次韵/酬/答/呈/送…),
-   then the longest KNOWN poet name right after it (3-char preferred, 2-char fallback, minus a
-   stoplist of places/roles). resolveTarget keeps only a SAME-DYNASTY namesake (the precision
-   guard — cross-dynasty matches on a bare 2–3-char string are almost always a place / 字号
-   collision). 4,341 edges / 110 KB → **tracked in git** (network works out of the box).
+   赠诗 dedication network. For each title, scan ALL markers (寄/赠/和/次韵/酬/答/呈/送…) and emit
+   one edge per DISTINCT recipient (兼寄/兼简 are legitimately multi-edge; no early break, so
+   marker order can't drop the primary dedication). findName = greedy-longest known name
+   (4→3→2 chars) with a 2-char COMPLETENESS guard: a bare 2-char name is taken only if followed
+   by a name-ending char / role-title / punctuation / end, so a longer name or surname+role
+   isn't truncated (王介甫↛王介, 李道士↛李道). resolveTarget: bare names SAME-DYNASTY only; a
+   curated 号/字→本名 alias table (晦庵→朱熹, 东坡→苏轼, 遗山→元好问…) resolves famous references
+   across dynasties. 3,397 edges / 86 KB → **tracked in git** (network works out of the box).
+   Top edges are now real literary friendships: 苏辙→苏轼, 元稹→白居易, 刘禹锡→白居易, 黄庭坚→苏轼.
 ```
 
 Iterate on gifts/manifest only (reuse the 306 MB of poems/+firstline/): `SKIP_HEAVY=1 node

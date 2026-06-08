@@ -25,8 +25,9 @@ The app loads these static assets, builds a `PoetryDataset`, and calls
 frontend's `lineBucket(s) = (hashStr(s)&0xff)` (`src/data/dynasties.ts::hashStr`) are the SAME
 FNV-1a-32, so `searchByLine` loads the shard the pipeline wrote the line into. `FirstLineRef.i`
 indexes the poet's `poems[]` array in the **same order** the poems shard was written, so a hit
-resolves to `poems[poetId][i]`. **赠诗 edges** are emitted only when both endpoints are corpus
-poets **of the same dynasty** (precision; also keeps every line inside one dynasty shell).
+resolves to `poems[poetId][i]`. **赠诗 edges** connect two corpus poets; a bare-name match must
+be **same-dynasty** (precision), while a curated 号/字 **alias** (晦庵→朱熹…) may resolve a famous
+reference across dynasties (the ~9% cross-dynasty edges = genuine homage, e.g. a 清人 和东坡).
 
 **First-paint budget ≤ 1.3 MB brotli.** Per-poet poem shards (~60–90 MB total) load only on
 focus. Star x/y/z are **computed client-side** from poet `id` + dynasty shell (zero asset
