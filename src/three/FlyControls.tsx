@@ -5,7 +5,9 @@ import { useStore } from "../state/store";
 import { pullAt, COMMON_K } from "../engine/engineApi";
 import { loadPoetPoems } from "../data/load";
 import { pickTargets, SIZE_SCALE } from "./picking";
-import { spinXZ, unspinXZ, galaxySpin } from "./galaxyParams";
+import { spinXZ, unspinXZ, galaxySpin, SPIN_RATE, GALAXY } from "./galaxyParams";
+
+const GRAVITY_R = GALAXY.RADIUS * 1.15; // inside this sphere the camera is "in the galaxy's grip"
 
 const BASE_SPEED = 140; // world units/sec at speed ×1 (slow, galactic feel)
 
@@ -178,6 +180,21 @@ export function FlyControls() {
         useStore.getState().setFlyTarget(null);
       }
       return;
+    }
+    // 引力: once inside the galaxy, orbit the camera WITH the spin (same Δ as the galaxy this
+    // frame) so the stars hold still on screen — otherwise close-up stars drift tangentially
+    // faster than you can click. Outside the sphere you watch it turn from afar.
+    if (useStore.getState().gravity) {
+      const cp = camera.position;
+      if (cp.x * cp.x + cp.y * cp.y + cp.z * cp.z < GRAVITY_R * GRAVITY_R) {
+        const dA = SPIN_RATE * dt; // matches advanceSpin(dt) in Galaxy
+        const c = Math.cos(dA), s = Math.sin(dA);
+        const px = cp.x, pz = cp.z;
+        cp.x = px * c + pz * s; // RotY(dA): orbit position about the galaxy axis
+        cp.z = -px * s + pz * c;
+        euler.current.y += dA; // turn heading by the same amount → view stays galaxy-locked
+        camera.quaternion.setFromEuler(euler.current);
+      }
     }
     const k = keys.current;
     const v = new THREE.Vector3();

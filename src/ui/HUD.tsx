@@ -21,6 +21,8 @@ export function HUD() {
   const toggleGifts = useStore((s) => s.toggleGifts);
   const quality = useStore((s) => s.quality);
   const toggleQuality = useStore((s) => s.toggleQuality);
+  const gravity = useStore((s) => s.gravity);
+  const toggleGravity = useStore((s) => s.toggleGravity);
   const speed = useStore((s) => s.speed);
   const loaded = useStore((s) => s.loaded);
   const m = getManifest();
@@ -65,6 +67,13 @@ export function HUD() {
           title="显示诗人之间的赠答网络（寄/赠/和/次韵），选中诗人可高亮其往来"
         >
           赠诗
+        </button>
+        <button
+          className={gravity ? "filter on" : "filter"}
+          onClick={toggleGravity}
+          title="引力：进入星系后摄像机随星系一同自转，恒星相对静止、好点选（默认开）"
+        >
+          引力
         </button>
         <button
           className="filter"

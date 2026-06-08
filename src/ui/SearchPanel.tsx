@@ -215,7 +215,7 @@ export function SearchPanel() {
                 <div className="rev-poem">
                   <div className="poem-body" lang="zh">
                     {rev.lines.map((l, i) => (
-                      <div className="poem-line" key={i}>
+                      <div className={rev.form === "ziyou" ? "poem-line wrap" : "poem-line"} key={i}>
                         {l}
                       </div>
                     ))}

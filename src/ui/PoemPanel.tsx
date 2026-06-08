@@ -22,7 +22,7 @@ export function PoemPanel() {
       </button>
       <div className="poem-body" lang="zh">
         {selected.lines.map((line, i) => (
-          <div className="poem-line" key={i}>
+          <div className={isFree ? "poem-line wrap" : "poem-line"} key={i}>
             {line}
           </div>
         ))}

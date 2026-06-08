@@ -293,6 +293,13 @@ canvas {
   white-space: nowrap;
   position: relative;
 }
+/* 自由格式 / 词 — variable, often long lines must WRAP, not clip off the panel edge */
+.poem-line.wrap {
+  white-space: normal;
+  word-break: break-word;
+  letter-spacing: 0.1em;
+  line-height: 1.75;
+}
 /* a faint gold rule under the poem, like an ink underscore */
 .poem-body::after {
   content: "";

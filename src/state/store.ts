@@ -31,6 +31,7 @@ interface State {
   // render quality (scales galaxy particle counts + bloom for weak GPUs)
   quality: "high" | "low";
   // camera
+  gravity: boolean; // when inside the galaxy, co-rotate the camera with the spin (stars hold still)
   speed: number; // multiplier
   flyTarget: [number, number, number] | null;
 
@@ -49,6 +50,7 @@ interface State {
   clearPoet: () => void;
   toggleGifts: () => void;
   toggleQuality: () => void;
+  toggleGravity: () => void;
   setSpeed: (s: number) => void;
   setFlyTarget: (t: [number, number, number] | null) => void;
 }
@@ -71,6 +73,7 @@ export const useStore = create<State>((set) => ({
   poetFocus: null,
   showGifts: false,
   quality: "high",
+  gravity: true,
   speed: 1,
   flyTarget: null,
 
@@ -103,6 +106,7 @@ export const useStore = create<State>((set) => ({
   clearPoet: () => set({ selectedPoet: null, poetPoems: null, poetFocus: null }),
   toggleGifts: () => set((s) => ({ showGifts: !s.showGifts })),
   toggleQuality: () => set((s) => ({ quality: s.quality === "high" ? "low" : "high" })),
+  toggleGravity: () => set((s) => ({ gravity: !s.gravity })),
   setSpeed: (speed) => set({ speed }),
   setFlyTarget: (flyTarget) => set({ flyTarget }),
 }));
