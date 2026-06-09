@@ -167,7 +167,19 @@ node pipeline/build-lexicon.mjs                            # lexicon.json (needs
 - ✅ **Fixed dev port** — `vite.config` `server.port:5199 strictPort` so a sibling worktree's stale server can't silently
   shadow the preview (`.claude/launch.json` already has shiyun-gpupick on 5199).
 
-### ✅ FIXED this round — Range egress was DORMANT, now LIVE
+### ✅ FIXED — 诗句 search + real-poem detection were DEAD (missing `lines/`)
+`public/data/lines/` (the all-lines content-search index, ~791 MB, git-ignored) was ABSENT, so
+`searchByLine` returned nothing → the 诗句 tab showed no real hits AND `findReal` (compose "this is a
+real poem" detector) silently failed; a 诗句 search of a real poem could then only offer the void
+"半编号" button, so the SAME poem landed in the void via search but on a planet via the directory.
+**Fix:** `pipeline/build-lines.mjs` (`npm run build:lines`) rebuilds `lines/` from the existing
+`poems/*.json` (no corpus; same key/bucket/ref format as `build-data.mjs`; per-line cap now keeps the
+most-prolific author so 床前明月光 always retains 李白《静夜思》). Built: 256 buckets / 9.18 M refs.
+Verified: 诗句 床前明月光 → 李白《静夜思》 top hit → flies to the **planet** (same spot the 目录 uses, so the
+double-location is gone); findReal flags the corpus-exact 静夜思. *(Note: the corpus stores 「举头望**山**月」,
+so the popular 「举头望明月」 won't exact-match findReal — correct, not a bug.)* **Re-run on fresh worktrees.**
+
+### ✅ FIXED — Range egress was DORMANT, now LIVE
 `manifest.poemSidecar:true` but `public/data/poems/*.idx.json` sidecars were **ABSENT** (the committed data predated the
 sidecar pass), so `loadPoetPoems` fell through to a whole-bucket (~0.9 MB) fetch on **every** poet click. **Fix:**
 `pipeline/build-sidecars.mjs` (`npm run build:sidecars`) re-emits each `poems/{bucket}.json` canonically + its byte-offset
