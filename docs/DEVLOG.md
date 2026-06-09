@@ -18,7 +18,13 @@ real GPU. Data dirs (`poems/`, `lines/`) are git-ignored — see HANDOFF "data p
   delete-1 / SymSpell skeleton index `linesf/` (4096 shards, disk-staged so it doesn't OOM): a same-length
   1-substitution shares the (L-1) skeleton with the differing char dropped. `searchByLine` adds a fuzzy
   fallback (when exact = 0, len 4..10) via `lineSkeletons` + `loadFzShard`. `lineSkeletons` has 4 unit tests.
-  **Large local index (~GBs, git-ignored); a DEPLOY needs a curated/server-side fuzzy** (noted).
+  **Large local index (~4.4 GB, 41 M keys, git-ignored); a DEPLOY needs a curated/server-side fuzzy** (noted).
+  - `fb2ad58` **fix**: the per-skeleton cap ranked by poemCount → 李白《静夜思》(1107首) was EVICTED from the shared
+    skeleton 举头望月 by hyper-prolific minor poets (王世贞 8009首), so 举头望明月 found noise. Now the cap scores the
+    48 landmark poets (`FAMOUS`) far above poemCount (never evicted) + `searchByLine` ranks landmark poets first.
+    Verified: 举头望明月 → 李白《静夜思》 #1. **Limitation/lever**: only the 48 landmark poets are protected — a famous
+    poem by a non-landmark poet (《春江花月夜》/张若虚, 2首) can still be evicted from a shared skeleton. Widen `FAMOUS`
+    in `build-fuzzy.mjs` (+ re-run `npm run build:fuzzy`) to cover more, or move to a curated名篇 table for deploy.
 - **Orbit-lock (item 2)** — the lock is now an orbit camera: closer default distance (was too far), DRAG
   rotates the locked view (yaw/pitch, no release), WHEEL zooms (distance); movement keys still release.
   (`FlyControls` `lock` ref + handlers.)
