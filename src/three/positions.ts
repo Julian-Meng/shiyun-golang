@@ -54,29 +54,34 @@ export function poetPosition(p: PoetRow): [number, number, number] {
   ];
 }
 
-// ── Poems as orbiting "planets" around their poet ───────────────────────────────────────────────
-// A poem at index `poemIdx` of poet `p` sits on a flattened, area-uniform disc around the poet star,
-// laid out by the golden angle so satellites spread evenly (no clumping) and the disc fills smoothly.
-// A prolific poet (李白) gets a large, full system; a one-poem poet gets a single close satellite.
+// ── Poems as a soft 3D star-cluster around their poet ───────────────────────────────────────────
+// A poem at index `poemIdx` of poet `p` sits in a SOFT, near-spherical cloud around the poet star —
+// NOT a flat disc (a flat disc read as a rectangular "block" edge-on and all discs aligned to the
+// galaxy plane → the sky looked tiled). Directions use a spherical-Fibonacci spread (even, no
+// clumping) and the radius is volume-filling with per-point jitter (soft edge, no hard shell). A
+// prolific poet (李白) becomes a dense little cluster; a one-poem poet a single near satellite.
 const GOLDEN = Math.PI * (3 - Math.sqrt(5)); // ~2.39996 rad — even angular spread
 
-/** System radius (LOCAL units) of a poet's poem-disc — grows with poemCount, capped to limit overlap. */
+/** Cluster radius (LOCAL units) of a poet's poem-cloud — grows with poemCount, capped to limit overlap. */
 export function poemSystemRadius(poemCount: number): number {
   return Math.min(90, 8 + 2.0 * Math.sqrt(Math.max(1, poemCount)));
 }
 
-/** Orbital OFFSET (relative to the poet centre) of poem `poemIdx`. Cheap — no poetPosition call,
- *  so the "show ALL poems" build can compute the poet centre ONCE and add this per poem. */
+/** OFFSET (relative to the poet centre) of poem `poemIdx` in the soft 3D cluster. Cheap — no
+ *  poetPosition call — so the "show ALL poems" build computes the poet centre ONCE and adds this. */
 export function poemOffset(p: PoetRow, poemIdx: number): [number, number, number] {
   const P = Math.max(1, p.poemCount);
   const R0 = poemSystemRadius(P);
-  const frac = (poemIdx + 0.5) / P;
-  const rho = R0 * Math.sqrt(frac); // area-uniform → even areal density, no central blob
-  const phase = (hashStr(p.id) & 0xffff) * 0.0001; // per-poet phase so systems aren't aligned
-  const ang = poemIdx * GOLDEN + phase;
+  // even direction on a sphere (spherical Fibonacci) → a soft 3D cluster, never a flat disc
+  const yd = 1 - (2 * (poemIdx + 0.5)) / P; // +1..-1 (latitude)
+  const rxy = Math.sqrt(Math.max(0, 1 - yd * yd));
+  const phase = (hashStr(p.id) & 0xffff) * 0.001; // per-poet phase so clusters aren't aligned
+  const th = poemIdx * GOLDEN + phase;
   const h = hashStr(p.id + ":" + poemIdx);
-  const yj = (((h >>> 7) & 0xff) / 255 - 0.5) * R0 * 0.5; // gentle disc thickness
-  return [Math.cos(ang) * rho, yj, Math.sin(ang) * rho];
+  const jitter = 0.7 + 0.55 * (((h >>> 8) & 0xff) / 255); // soft, non-shell boundary (no hard edge)
+  const rho = R0 * Math.cbrt((poemIdx + 0.5) / P) * jitter; // volume-filling radius
+  const FLAT = 0.85; // very slightly flattened toward the galaxy plane, but essentially spherical
+  return [rxy * Math.cos(th) * rho, yd * rho * FLAT, rxy * Math.sin(th) * rho];
 }
 
 /** Absolute LOCAL position of a poem-planet (poet centre + orbital offset). */

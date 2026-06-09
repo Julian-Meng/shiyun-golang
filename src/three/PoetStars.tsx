@@ -129,15 +129,19 @@ export function PoetStars() {
     };
   }, [gl, camera, built]);
 
-  // dynasty filter → zero hidden poets' size
+  // dynasty filter → zero hidden poets' size; the SELECTED poet's star is enlarged so it + its poem
+  // cluster read at a glance as one 星群 (the GPU picker shares this aSize, so it's easier to click too).
   useEffect(() => {
     const hide = new Array<boolean>(DYNASTY_COUNT).fill(false);
     for (const d of DYNASTIES) hide[d.id] = hidden.has(d.key);
     const attr = built.points.geometry.getAttribute("aSize") as THREE.BufferAttribute;
     const arr = attr.array as Float32Array;
-    for (let i = 0; i < arr.length; i++) arr[i] = hide[built.dynId[i]] ? 0 : built.baseSize[i];
+    for (let i = 0; i < arr.length; i++) {
+      if (hide[built.dynId[i]]) { arr[i] = 0; continue; }
+      arr[i] = built.poets[i].id === selId ? built.baseSize[i] * 1.8 : built.baseSize[i];
+    }
     attr.needsUpdate = true;
-  }, [hidden, built]);
+  }, [hidden, built, selId]);
 
   const spinRef = useRef<THREE.Group>(null);
   useFrame((_, dt) => {

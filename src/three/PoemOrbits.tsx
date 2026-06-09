@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useRef } from "react";
 import { useFrame } from "@react-three/fiber";
 import { DYNASTY_BY_KEY, DYNASTIES, DYNASTY_COUNT, hashStr } from "../data/dynasties";
 import { getPoets, type PoetRow } from "../data/load";
@@ -9,44 +9,52 @@ import { poetPosition, poemOffset } from "./positions";
 import { encodePoemPickColor } from "./gpuPick";
 import { pickTargets } from "./picking";
 
-// Poems as orbiting "planets" around their poet star. Two modes (driven by store.showAllPoems):
-//   • OFF (default, 普通机器): only the SELECTED poet's poems orbit — an on-demand 彩蛋 on poet click.
-//   • ON  (高性能机器): EVERY poet's poems orbit (857,877 points) — the whole sky becomes star systems.
-// Positions are deterministic (positions.ts), so a poem-planet is at the SAME spot the panels /
-// search fly to (定位). The layer spins with the shared galaxy angle, exactly like PoetStars, so the
-// planets stay locked to their poet as the galaxy turns. *(brightness/size tunable on a real GPU.)*
+// Poems as a soft 3D star-cluster around their poet (positions.ts). Two modes (store.showAllPoems):
+//   • OFF (default, 普通机器): only the SELECTED poet's poems appear — on poet click they FLASH then
+//     fade IN (闪光渐入), and fade OUT when you leave; the selected cluster is boosted (brighter +
+//     larger + twinkling) so it reads at a glance as a 星群 belonging to that poet.
+//   • ON  (高性能机器): EVERY poet's poems render — one dim 857,877-point field, built once.
+// The layer spins with the shared galaxy angle (locked to PoetStars). Planets are clickable (gpuPick).
+// *(brightness/size/cluster-radius tunable on a real GPU — headless can't render the additive field.)*
 
-// dim, small satellites — clearly secondary to the ×2.3 poet stars (so the hierarchy reads).
+const FADE_IN = 0.55; // s — flash → settle
+const FADE_OUT = 0.45; // s — gentle dim-out
+
+// dim, small satellites — secondary to the ×2.3 poet stars. uAlpha drives fade in/out; uFlare is the
+// birth flash (size + brightness bump that decays). The all-layer leaves both at their defaults (static).
 function planetMaterial(bright: number, sizeScale: number, maxPx: number, twinkle: boolean) {
   return new THREE.ShaderMaterial({
     transparent: true,
     depthWrite: false,
     blending: THREE.AdditiveBlending,
-    uniforms: { uTime: { value: 0 } },
+    uniforms: { uTime: { value: 0 }, uAlpha: { value: 1 }, uFlare: { value: 0 } },
     vertexShader: /* glsl */ `
-      attribute vec3 aColor; ${twinkle ? "attribute float aSeed; uniform float uTime;" : ""}
-      varying vec3 vColor; ${twinkle ? "varying float vTw;" : ""}
+      attribute vec3 aColor; ${twinkle ? "attribute float aSeed;" : ""}
+      uniform float uTime; uniform float uAlpha; uniform float uFlare;
+      varying vec3 vColor; varying float vTw; varying float vAlpha;
       void main() {
         vec4 mv = modelViewMatrix * vec4(position, 1.0);
-        gl_PointSize = clamp(${sizeScale.toFixed(1)} / -mv.z, 1.0, ${maxPx.toFixed(1)});
-        ${twinkle ? "vTw = 0.65 + 0.35 * sin(uTime * 1.7 + aSeed * 6.2831853);" : ""}
-        vColor = aColor * ${bright.toFixed(2)};
+        float flareSize = 1.0 + uFlare * 1.8;             // birth flash → larger, then settles
+        gl_PointSize = clamp(${sizeScale.toFixed(1)} / -mv.z, 1.0, ${maxPx.toFixed(1)}) * flareSize;
+        vTw = ${twinkle ? "0.65 + 0.35 * sin(uTime * 1.7 + aSeed * 6.2831853)" : "1.0"};
+        vColor = aColor * ${bright.toFixed(2)} * (1.0 + uFlare * 1.4); // brighter at birth
+        vAlpha = uAlpha;
         gl_Position = projectionMatrix * mv;
       }`,
     fragmentShader: /* glsl */ `
-      varying vec3 vColor; ${twinkle ? "varying float vTw;" : ""}
+      varying vec3 vColor; varying float vTw; varying float vAlpha;
       void main() {
         float d = length(gl_PointCoord - 0.5);
         float a = smoothstep(0.5, 0.05, d);
         if (a < 0.02) discard;
-        gl_FragColor = vec4(vColor ${twinkle ? "* vTw" : ""}, a ${twinkle ? "* vTw" : ""});
+        gl_FragColor = vec4(vColor * vTw, a * vTw * vAlpha);
       }`,
   });
 }
 
 type PoemRef = { poet: PoetRow; poemIdx: number } | null;
 
-function buildLayer(poets: PoetRow[], total: number, withSeed: boolean) {
+function buildGeometry(poets: PoetRow[], total: number, withSeed: boolean) {
   const pos = new Float32Array(total * 3);
   const col = new Float32Array(total * 3);
   const pick = new Float32Array(total * 3); // colour-encoded local poem id → clickable planets
@@ -92,62 +100,130 @@ function buildLayer(poets: PoetRow[], total: number, withSeed: boolean) {
   return { geo, resolve };
 }
 
+interface Layer {
+  points: THREE.Points;
+  geo: THREE.BufferGeometry;
+  mat: THREE.ShaderMaterial;
+  resolve: (id: number) => PoemRef;
+  sizeScale: number;
+  maxPx: number;
+  born: number;
+  dying: boolean;
+  dyingAt: number;
+}
+
+function makeLayer(
+  poets: PoetRow[],
+  total: number,
+  o: { bright: number; sizeScale: number; maxPx: number; twinkle: boolean; born: number },
+): Layer | null {
+  if (!total) return null;
+  const { geo, resolve } = buildGeometry(poets, total, o.twinkle);
+  const mat = planetMaterial(o.bright, o.sizeScale, o.maxPx, o.twinkle);
+  const points = new THREE.Points(geo, mat);
+  points.frustumCulled = false;
+  return { points, geo, mat, resolve, sizeScale: o.sizeScale, maxPx: o.maxPx, born: o.born, dying: false, dyingAt: 0 };
+}
+
 export function PoemOrbits() {
   const showAll = useStore((s) => s.showAllPoems);
   const selectedPoet = useStore((s) => s.selectedPoet);
+  const groupRef = useRef<THREE.Group>(null);
+  const clock = useRef(0);
+  const allRef = useRef<Layer | null>(null); // persistent "show all" field
+  const selLayers = useRef<Layer[]>([]); // selected-poet clusters (fading in/out)
 
-  // ALL poets' poems — heavy (≈858k points), built ONLY while the toggle is on. Depends solely on
-  // showAll so selecting a poet does NOT rebuild it. Dim + tiny (it's a field, not landmarks).
-  const all = useMemo(() => {
-    if (!showAll) return null;
+  const register = (L: Layer | null) => {
+    pickTargets.poemLayer = L
+      ? { geometry: L.geo, sizeScale: L.sizeScale, maxPx: L.maxPx, resolve: L.resolve }
+      : null;
+  };
+
+  // ALL field: build/teardown when the 行星 toggle flips (no fade — it's a deliberate overview).
+  useEffect(() => {
+    const grp = groupRef.current;
+    if (!grp || !showAll) return;
     const poets = getPoets();
     let total = 0;
     for (const p of poets) total += Math.max(0, p.poemCount);
-    if (!total) return null;
-    const sizeScale = 360, maxPx = 11;
-    const { geo, resolve } = buildLayer(poets, total, false);
-    const mat = planetMaterial(1.25, sizeScale, maxPx, false);
-    const points = new THREE.Points(geo, mat);
-    points.frustumCulled = false;
-    return { points, geo, mat, resolve, sizeScale, maxPx };
+    const L = makeLayer(poets, total, { bright: 1.25, sizeScale: 360, maxPx: 11, twinkle: false, born: clock.current });
+    if (!L) return;
+    allRef.current = L;
+    grp.add(L.points);
+    register(L);
+    return () => {
+      grp.remove(L.points);
+      L.geo.dispose();
+      L.mat.dispose();
+      allRef.current = null;
+      register(null);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [showAll]);
 
-  // ONLY the selected poet's poems — cheap (≤~3.6k points), the on-demand 彩蛋 when the toggle is off.
-  // Slightly brighter + larger + twinkling so a clicked poet's "system" reads clearly.
-  const sel = useMemo(() => {
-    if (showAll || !selectedPoet) return null;
-    const total = Math.max(0, selectedPoet.poemCount);
-    if (!total) return null;
-    const sizeScale = 520, maxPx = 20;
-    const { geo, resolve } = buildLayer([selectedPoet], total, true);
-    const mat = planetMaterial(1.9, sizeScale, maxPx, true);
-    const points = new THREE.Points(geo, mat);
-    points.frustumCulled = false;
-    return { points, geo, mat, resolve, sizeScale, maxPx };
-  }, [showAll, selectedPoet]);
-
-  useEffect(() => () => { all?.geo.dispose(); all?.mat.dispose(); }, [all]);
-  useEffect(() => () => { sel?.geo.dispose(); sel?.mat.dispose(); }, [sel]);
-
-  // register the ACTIVE poem layer so the GPU picker can resolve a clicked planet → poet + poem.
+  // SELECTED poet's cluster: fade the previous one OUT, FLASH the new one in (闪光渐入). Boosted
+  // (brighter + larger + twinkling) so the selected poet's 星群 is obvious. Skipped while 行星 is ON
+  // (the all-field already shows it).
   useEffect(() => {
-    const active = all ?? sel;
-    pickTargets.poemLayer = active
-      ? { geometry: active.geo, sizeScale: active.sizeScale, maxPx: active.maxPx, resolve: active.resolve }
-      : null;
-    return () => { pickTargets.poemLayer = null; };
-  }, [all, sel]);
+    const grp = groupRef.current;
+    if (!grp) return;
+    for (const L of selLayers.current) {
+      if (!L.dying) { L.dying = true; L.dyingAt = clock.current; }
+    }
+    if (!showAll && selectedPoet) {
+      const L = makeLayer([selectedPoet], Math.max(0, selectedPoet.poemCount), {
+        bright: 2.3, sizeScale: 560, maxPx: 24, twinkle: true, born: clock.current,
+      });
+      if (L) {
+        L.mat.uniforms.uAlpha.value = 0; // start invisible → fade in
+        L.mat.uniforms.uFlare.value = 1; // start flashed → settle
+        selLayers.current.push(L);
+        grp.add(L.points);
+        register(L);
+      } else {
+        register(null);
+      }
+    } else if (!showAll) {
+      register(null);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedPoet, showAll]);
 
-  const spinRef = useRef<THREE.Group>(null);
+  // teardown everything on unmount
+  useEffect(() => {
+    return () => {
+      const grp = groupRef.current;
+      for (const L of selLayers.current) { grp?.remove(L.points); L.geo.dispose(); L.mat.dispose(); }
+      selLayers.current = [];
+      pickTargets.poemLayer = null;
+    };
+  }, []);
+
   useFrame((_, dt) => {
-    if (spinRef.current) spinRef.current.rotation.y = galaxySpin.angle; // lock to the poet layer's spin
-    if (sel) (sel.mat.uniforms.uTime.value as number) += dt;
+    clock.current += dt;
+    const t = clock.current;
+    const grp = groupRef.current;
+    if (grp) grp.rotation.y = galaxySpin.angle; // lock to the poet layer's spin
+    if (allRef.current) allRef.current.mat.uniforms.uTime.value = t;
+
+    const keep: Layer[] = [];
+    for (const L of selLayers.current) {
+      L.mat.uniforms.uTime.value = t;
+      if (!L.dying) {
+        const k = Math.min(1, (t - L.born) / FADE_IN);
+        L.mat.uniforms.uAlpha.value = k; // fade in
+        L.mat.uniforms.uFlare.value = 1 - k; // flash → settle
+        keep.push(L);
+      } else {
+        const k = (t - L.dyingAt) / FADE_OUT;
+        if (k >= 1) { grp?.remove(L.points); L.geo.dispose(); L.mat.dispose(); continue; } // gone
+        L.mat.uniforms.uAlpha.value = Math.max(0, 1 - k); // dim out
+        L.mat.uniforms.uFlare.value = 0;
+        keep.push(L);
+      }
+    }
+    selLayers.current = keep;
   });
 
-  return (
-    <group ref={spinRef}>
-      {all && <primitive object={all.points} />}
-      {sel && <primitive object={sel.points} />}
-    </group>
-  );
+  return <group ref={groupRef} />;
 }
