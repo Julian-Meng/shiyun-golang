@@ -4,6 +4,7 @@ import { EffectComposer, Bloom } from "@react-three/postprocessing";
 import { Galaxy } from "./three/Galaxy";
 import { PoetStars } from "./three/PoetStars";
 import { PoemOrbits } from "./three/PoemOrbits";
+import { PoemGuides } from "./three/PoemGuides";
 import { GiftLines } from "./three/GiftLines";
 import { PulledStars } from "./three/PulledStars";
 import { FlyControls } from "./three/FlyControls";
@@ -65,6 +66,7 @@ export default function App() {
         <Galaxy />
         {loaded && <PoetStars />}
         {loaded && <PoemOrbits />}
+        {loaded && <PoemGuides />}
         {loaded && <GiftLines />}
         <PulledStars />
         <FlyControls />

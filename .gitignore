@@ -10,3 +10,5 @@ dist/
 # NOTE: no inline comments below — git treats trailing text as part of the path pattern.
 public/data/poems/
 public/data/lines/
+public/data/linesf/
+public/data/_fztmp/

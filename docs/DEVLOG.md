@@ -10,7 +10,23 @@ real GPU. Data dirs (`poems/`, `lines/`) are git-ignored — see HANDOFF "data p
 
 ---
 
-## 2026-06-09 — Session: 5th agent (UX5 → 行星/planets → 群星 → lock-follow)
+## 2026-06-09 — Session: 5th agent (UX5 → 行星/planets → 群星 → lock-follow → fuzzy search)
+
+### Round 8 — fuzzy LINE index (mid-line 异文) + orbit-lock + sustained highlight + guide lines
+- **诗句 mid-line variant search (item 1)** — round-7's `findReal` fuzzy only covered COMPOSE; 诗句 search of a
+  variant line (「举头望明月」) still missed. New `pipeline/build-fuzzy.mjs` (`npm run build:fuzzy`) builds a
+  delete-1 / SymSpell skeleton index `linesf/` (4096 shards, disk-staged so it doesn't OOM): a same-length
+  1-substitution shares the (L-1) skeleton with the differing char dropped. `searchByLine` adds a fuzzy
+  fallback (when exact = 0, len 4..10) via `lineSkeletons` + `loadFzShard`. `lineSkeletons` has 4 unit tests.
+  **Large local index (~GBs, git-ignored); a DEPLOY needs a curated/server-side fuzzy** (noted).
+- **Orbit-lock (item 2)** — the lock is now an orbit camera: closer default distance (was too far), DRAG
+  rotates the locked view (yaw/pitch, no release), WHEEL zooms (distance); movement keys still release.
+  (`FlyControls` `lock` ref + handlers.)
+- **Sustained highlight (item 3)** — the highlight now holds FULL brightness (`HOLD_FLARE`) for the whole
+  ~10 s then weakens (was flash-then-dim); brighter/larger so the cluster stays legible in the spread field.
+- **行星指引 / guide lines (item 4)** — new `three/PoemGuides.tsx`: selecting a poet emits a line to EVERY
+  poem it wrote (赠诗-style), self-rotating with the cloud, one-shot ~10 s (grow→hold→fade) then auto-deletes.
+- Verified: build + 66/66.
 
 ### Round 7 — bigger irregular self-rotating clusters + 10s highlight + camera lock + fuzzy findReal
 `874cbba`

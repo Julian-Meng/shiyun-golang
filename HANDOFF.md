@@ -161,7 +161,25 @@ node pipeline/build-lexicon.mjs                            # lexicon.json (needs
   poet/poem id split have 5 new vitest cases (**62 total**). *(GPU pick can't run on the headless preview — the whole r3f
   Canvas subtree is dormant on swiftshader; verify CLICKING a planet on a real GPU.)*
 
-**DONE — round 7 (latest; verified build + 62/62; visual/interaction need a real-GPU pass — no preview):**
+**DONE — round 8 (latest; verified build + 66/66; visual/interaction need a real-GPU pass — no preview):**
+- ✅ **诗句 mid-line variant search (FUZZY LINE INDEX)** — round-7's `findReal` fuzzy only covered the COMPOSE tab;
+  searching a variant line in 诗句 (「举头望明月」 vs corpus「举头望山月」) still missed. **`pipeline/build-fuzzy.mjs`**
+  (`npm run build:fuzzy`) builds a **delete-1 / SymSpell** skeleton index `public/data/linesf/` (**4096** shards,
+  disk-staged in `_fztmp` so it doesn't OOM — the in-RAM build did). A same-length 1-substitution shares the (L-1)
+  skeleton formed by dropping the differing position. `load.ts::searchByLine` adds a fuzzy fallback (only when EXACT=0,
+  Han len 4..10) via `lineSkeletons` (4 unit tests) + `loadFzShard` (`fzBucket` = `hashStr&0xfff`). No-op if `linesf/`
+  absent. **⚠ The index is LARGE (~GBs, git-ignored) → fine for LOCAL; a DEPLOY needs a curated/server-side fuzzy.**
+  Re-run `npm run build:fuzzy` on a fresh worktree.
+- ✅ **Orbit-lock (item 2)** — the camera lock is now an orbit: **closer** default distance (was too far), **drag rotates**
+  the locked view (yaw/pitch, does NOT release), **wheel zooms** (distance). Movement keys still release. (`FlyControls`
+  `lock` ref + drag/wheel handlers + useFrame spherical orbit.)
+- ✅ **Sustained highlight (item 3)** — the selected cluster now holds FULL brightness (`HOLD_FLARE`) for the whole ~10 s
+  then weakens (was flash-then-dim) + brighter/larger, so it stays legible against the spread field. (`PoemOrbits`.)
+- ✅ **行星指引 / guide lines (item 4)** — `three/PoemGuides.tsx`: selecting a poet emits a 赠诗-style line to EVERY poem
+  it wrote, self-rotating with the cloud (same `aCenter`/`aOmega` shader), one-shot ~10 s (grow→hold→fade) then
+  auto-deletes (no permanent clutter). Mounted in `App`.
+
+**DONE — round 7 (verified build + 62/62; visual/interaction need a real-GPU pass — no preview):**
 - ✅ **Bigger, irregular, SELF-ROTATING clusters** (round-6 was too small/local/uniform/blocky) — `poemSystemRadius`
   ~6× (35+13√P; 杜甫→~555); `poemOffset` = clumpy power-law radius + WIDE jitter + per-poet **ELLIPSOID axes**
   (sphere/ellipse/oblate). Each cloud SELF-ROTATES around its poet (`poemOmega` + shared `poemClock`), mirrored in the
@@ -177,14 +195,14 @@ node pipeline/build-lexicon.mjs                            # lexicon.json (needs
   `PoemOrbits` highlight `makeLayer(bright/sizeScale/maxPx)` + `HOLD`/`FADE_*`; `FlyControls` lock `dist`/`k`.
 
 ### ⏭ Next — mobile + productization (user's next phase)
-- **诗句 mid-line variant search** — the cheap `findReal` fuzzy is done; searching ONLY a variant LINE (「举头望明月」
-  alone) still misses (the index is keyed by the EXACT line). Build a FUZZY LINE INDEX in `build-lines.mjs`: per line
-  emit a "skeleton" key (drop-1-char positions and/or a sorted-char signature) so a 1-char-diff query hits. Data cost —
-  fold into this phase.
 - **Mobile / touch** — `FlyControls` is mouse+keyboard only → single-finger drag-look, two-finger pinch/push, tap-pick.
   Auto `画质·低` + disable bloom + cap/disable 行星-ON on mobile (devicePixelRatio / GPU sniff). Responsive panels
-  (bottom-sheet on narrow screens). First-paint already ≤1.3 MB.
-- **Deploy** — `npm run deploy:build` kit is ready (brotli + Range on `poems/*.json`); ship to a static host.
+  (bottom-sheet on narrow screens). First-paint already ≤1.3 MB. Lock orbit already works with drag/wheel — map to touch.
+- **Fuzzy index for DEPLOY** — `linesf/` is ~GBs (delete-1 over all lines) — fine locally, too big to host. For deploy:
+  build a CURATED fuzzy set (唐诗三百首 / 高频名篇), OR a server-side fuzzy, OR ship `linesf/` brotli'd behind a flag.
+  The 4096-shard split keeps per-query load ~MB, but total hosting cost is the open question.
+- **Deploy** — `npm run deploy:build` kit is ready (brotli + Range on `poems/*.json`); ship to a static host. Decide
+  the fuzzy strategy first (above).
 
 **DONE — UX iteration round 5 (verified: build + 57/57 + DOM mount; centre confirmed 够散/漂亮 by the user on a real GPU):**
 - ✅ **造诗 placeholder simplified** — the long hint clipped in the 320px panel; placeholder is now 「粘贴整首诗…」 and the

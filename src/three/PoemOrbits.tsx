@@ -17,9 +17,10 @@ import { pickTargets } from "./picking";
 // Each cloud SELF-ROTATES around its poet (aOmega + poemClock, mirrored in the GPU picker so clicks
 // still land). The whole group also rides the shared galaxy spin. *(sizes/brightness tune on a real GPU.)*
 
-const FADE_IN = 0.5; // s — flash → settle
-const HOLD = 9.0; // s — bright hold (FADE_IN + HOLD + FADE_OUT ≈ 10 s total visible)
-const FADE_OUT = 1.0; // s
+const FADE_IN = 0.4; // s — flash in
+const HOLD = 10.0; // s — held FULLY bright for the whole 10 s (then weaken), so the cluster stays legible
+const FADE_OUT = 1.5; // s
+const HOLD_FLARE = 0.6; // sustained brightness/size boost during the hold (not just the birth flash)
 
 // uAlpha = fade in/out; uFlare = birth flash (size + brightness); the cloud self-rotates by uTime*aOmega.
 function planetMaterial(bright: number, sizeScale: number, maxPx: number, twinkle: boolean) {
@@ -174,7 +175,7 @@ export function PoemOrbits() {
     activeHi.current = null;
     if (selectedPoet) {
       const L = makeLayer([selectedPoet], Math.max(0, selectedPoet.poemCount), {
-        bright: 2.4, sizeScale: 620, maxPx: 26, twinkle: true,
+        bright: 3.0, sizeScale: 720, maxPx: 30, twinkle: true,
       });
       if (L) {
         L.mat.uniforms.uAlpha.value = 0;
@@ -213,9 +214,10 @@ export function PoemOrbits() {
         alpha = Math.max(0, 1 - k); flare = 0;
       } else {
         const age = t - L.born;
-        if (age >= FADE_IN + HOLD) { L.outAt = t; alpha = 1; flare = 0; if (activeHi.current === L) { activeHi.current = null; expired = true; } }
-        else if (age < FADE_IN) { alpha = age / FADE_IN; flare = 1 - age / FADE_IN; }
-        else { alpha = 1; flare = 0; }
+        if (age >= FADE_IN + HOLD) { L.outAt = t; alpha = 1; flare = HOLD_FLARE; if (activeHi.current === L) { activeHi.current = null; expired = true; } }
+        // birth: flash from full → the sustained hold level; then HOLD: stay boosted the whole 10 s
+        else if (age < FADE_IN) { alpha = age / FADE_IN; flare = 1 - (1 - HOLD_FLARE) * (age / FADE_IN); }
+        else { alpha = 1; flare = HOLD_FLARE; }
       }
       L.mat.uniforms.uAlpha.value = alpha;
       L.mat.uniforms.uFlare.value = flare;

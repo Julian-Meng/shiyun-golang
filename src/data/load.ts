@@ -184,6 +184,7 @@ export function searchPoets(q: string, limit = 40): PoetRow[] {
 //    matching the pipeline's lineBucket). 床前明月光 / 疑是地上霜 → 李白《静夜思》. Lazy, like poems/. ──
 const HAN = /\p{Script=Han}/u;
 const lineBucket = (s: string) => (hashStr(s) & 0xff).toString(16).padStart(2, "0");
+const fzBucket = (s: string) => (hashStr(s) & 0xfff).toString(16).padStart(3, "0"); // 4096 fuzzy shards
 const _flShard = new Map<string, Record<string, FirstLineRef[]>>();
 async function loadFlShard(bucket: string, base: string): Promise<Record<string, FirstLineRef[]>> {
   let obj = _flShard.get(bucket);
@@ -195,6 +196,25 @@ async function loadFlShard(bucket: string, base: string): Promise<Record<string,
   return obj!;
 }
 
+// fuzzy (delete-1 skeleton) shards — linesf/{bucket}.json — for mid-line 异文 search (build-fuzzy.mjs).
+// Absent on a worktree that hasn't run `npm run build:fuzzy` → fetch returns {} → fuzzy simply no-ops.
+const _fzShard = new Map<string, Record<string, FirstLineRef[]>>();
+async function loadFzShard(bucket: string, base: string): Promise<Record<string, FirstLineRef[]>> {
+  let obj = _fzShard.get(bucket);
+  if (obj) return obj;
+  obj = await fetch(`${base}/linesf/${bucket}.json`)
+    .then((r) => (r.ok ? r.json() : {}))
+    .catch(() => ({}));
+  _fzShard.set(bucket, obj!);
+  return obj!;
+}
+/** All "drop one code point" skeletons of a line's Han chars (SymSpell-style 1-edit lookup key set). */
+export function lineSkeletons(cps: string[]): string[] {
+  const out = new Set<string>();
+  for (let i = 0; i < cps.length; i++) out.add(cps.slice(0, i).concat(cps.slice(i + 1)).join(""));
+  return [...out];
+}
+
 export interface LineHit {
   poetId: string;
   poemIdx: number;
@@ -203,23 +223,34 @@ export interface LineHit {
   firstLine: string;
   poet?: PoetRow;
 }
-/** Find real poems whose FIRST line matches the typed text (or its 5/7-char opening). */
+/** Find real poems containing the typed line — EXACT (any line / opening), then a FUZZY 1-edit
+ *  fallback (linesf/) so a mid-line variant like 「举头望明月」 still finds 李白《静夜思》 (corpus「山月」). */
 export async function searchByLine(query: string, base = "/data"): Promise<LineHit[]> {
   const cs = [...query].filter((c) => HAN.test(c));
   if (cs.length < 2) return [];
   const han = cs.join("");
-  // candidate keys: the whole input, plus common opening-line lengths if the user pasted more
-  const cands = new Set<string>([han]);
-  for (const k of [7, 6, 5, 4]) if (cs.length > k) cands.add(cs.slice(0, k).join(""));
   const seen = new Set<string>();
   const hits: LineHit[] = [];
+  const add = (r: FirstLineRef, firstLine: string) => {
+    const k2 = r.p + "#" + r.i;
+    if (seen.has(k2)) return;
+    seen.add(k2);
+    hits.push({ poetId: r.p, poemIdx: r.i, title: r.t, form: r.f, firstLine, poet: _byId.get(r.p) });
+  };
+  // EXACT: the whole input + common opening-line lengths if the user pasted more
+  const cands = new Set<string>([han]);
+  for (const k of [7, 6, 5, 4]) if (cs.length > k) cands.add(cs.slice(0, k).join(""));
   for (const key of cands) {
     const shard = await loadFlShard(lineBucket(key), base);
-    for (const r of shard[key] || []) {
-      const k2 = r.p + "#" + r.i;
-      if (seen.has(k2)) continue;
-      seen.add(k2);
-      hits.push({ poetId: r.p, poemIdx: r.i, title: r.t, form: r.f, firstLine: key, poet: _byId.get(r.p) });
+    for (const r of shard[key] || []) add(r, key);
+  }
+  // FUZZY fallback: only when exact found nothing and the input is a plausible single line (len 4..10).
+  // Drop each char of the query → skeletons; a 1-substitution corpus line shares the skeleton that
+  // drops the differing position. (No-op if linesf/ wasn't built.)
+  if (hits.length === 0 && cs.length >= 4 && cs.length <= 10) {
+    for (const sk of lineSkeletons(cs)) {
+      const shard = await loadFzShard(fzBucket(sk), base);
+      for (const r of shard[sk] || []) add(r, han);
     }
   }
   // a longer matched opening is more specific; then prefer the more prolific (better-known) poet
