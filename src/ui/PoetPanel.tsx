@@ -4,6 +4,7 @@ import { DYNASTY_BY_KEY } from "../data/dynasties";
 import { anyTextIndex } from "../engine/engineApi";
 import { poemPosition } from "../three/positions";
 import { ShareButton } from "./CopyButton";
+import { useSheet } from "./useSheet";
 
 const FORM_LABEL: Record<string, string> = {
   wujue: "五绝",
@@ -69,8 +70,23 @@ export function PoetPanel() {
     return fIdx >= 0 && fIdx < poems.length ? [fIdx, ...rest] : rest;
   }, [poems, focus]);
 
+  const sheet = useSheet(poet?.id ?? null);
+
   if (!poet) return null;
   const dyn = DYNASTY_BY_KEY[poet.dynasty];
+
+  // mobile: clicking a star stashes the poet as a bottom peek bar (name + 朝代 + 首数), not a full sheet
+  // over the galaxy; tap it to open the poem drawer. Re-collapses when a different poet is selected.
+  if (sheet.collapsed) {
+    return (
+      <div className="sheet-peek" onClick={sheet.expand}>
+        <span className="peek-label" style={{ color: dyn?.color }}>{poet.name}</span>
+        <span className="peek-sub">{dyn?.label ?? poet.dynasty} · {poet.poemCount} 首</span>
+        <span className="peek-cue">▲ 展开</span>
+        <button className="peek-x" onClick={(e) => { e.stopPropagation(); close(); }} aria-label="关闭">×</button>
+      </div>
+    );
+  }
 
   function indexFor(i: number): IdxInfo {
     const cache = idxCache.current;
@@ -101,6 +117,7 @@ export function PoetPanel() {
 
   return (
     <div className="poet-panel">
+      {sheet.mobile && <button className="peek-collapse" onClick={sheet.collapse}>▾ 收起到底部</button>}
       <button className="panel-close" onClick={close} aria-label="关闭">×</button>
       <div className="poet-head">
         <span className="poet-name" style={{ color: dyn?.color }}>{poet.name}</span>

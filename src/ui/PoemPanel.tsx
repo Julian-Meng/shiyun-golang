@@ -1,5 +1,6 @@
 import { useStore } from "../state/store";
 import { CopyButton, ShareButton } from "./CopyButton";
+import { useSheet } from "./useSheet";
 
 const FORM_LABEL: Record<string, string> = {
   wujue: "五言绝句",
@@ -12,11 +13,25 @@ const FORM_LABEL: Record<string, string> = {
 export function PoemPanel() {
   const selected = useStore((s) => s.selected);
   const close = useStore((s) => s.clearSelection);
+  const sheet = useSheet(selected?.babelIndex ?? null);
   if (!selected) return null;
   const isFree = selected.form === "ziyou";
 
+  // mobile: a fresh void-pull stays stashed as a bottom peek bar until tapped (never covers the galaxy)
+  if (sheet.collapsed) {
+    return (
+      <div className="sheet-peek" onClick={sheet.expand}>
+        <span className="peek-label">{FORM_LABEL[selected.form]}</span>
+        <span className="peek-sub">虚空里捞得一首诗 · {selected.babelDigits} 位编号</span>
+        <span className="peek-cue">▲ 展开</span>
+        <button className="peek-x" onClick={(e) => { e.stopPropagation(); close(); }} aria-label="关闭">×</button>
+      </div>
+    );
+  }
+
   return (
     <div className="poem-panel">
+      {sheet.mobile && <button className="peek-collapse" onClick={sheet.collapse}>▾ 收起到底部</button>}
       <button className="panel-close" onClick={close} aria-label="关闭">
         ×
       </button>

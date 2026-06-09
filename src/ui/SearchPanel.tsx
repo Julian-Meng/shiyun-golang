@@ -13,6 +13,7 @@ import {
 } from "../engine/engineApi";
 import { useStore } from "../state/store";
 import { poemPosition } from "../three/positions";
+import { COARSE } from "../three/detectQuality";
 import { CopyButton } from "./CopyButton";
 
 const FORM_LABEL: Record<string, string> = {
@@ -70,7 +71,8 @@ async function findReal(lines: string[]): Promise<RealHit> {
 
 export function SearchPanel() {
   const [tab, setTab] = useState<Tab>("poet");
-  const [collapsed, setCollapsed] = useState(false);
+  // mobile: start collapsed → only the tab row shows (the "hint"); tapping a tab expands it. Desktop: open.
+  const [collapsed, setCollapsed] = useState(COARSE);
   const [q, setQ] = useState("");
   const [results, setResults] = useState<PoetRow[]>([]);
   const [hits, setHits] = useState<LineHit[]>([]);
@@ -213,6 +215,7 @@ export function SearchPanel() {
 
   function switchTab(t: Tab) {
     setTab(t);
+    setCollapsed(false); // tapping a tab expands the panel (on mobile it starts collapsed to the tab row)
     setQ("");
     setResults([]);
     setHits([]);

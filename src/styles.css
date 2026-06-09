@@ -1467,6 +1467,85 @@ canvas {
   background: transparent;
 }
 
+/* ── Mobile peek bar (collapsed bottom-sheet state) ──────────────────────────
+   On touch devices the data panels (诗人 / 虚空诗 …) default to this slim bottom bar instead of a
+   full-screen sheet, so a selection never covers the galaxy — only a one-line hint + 「展开」. Tapping it
+   reveals the full sheet; an expanded mobile sheet gets a 「收起」 handle to come back. Rendered only when
+   COARSE (JS-gated in the panels), so it needs NO @media and works on tablets (>600px) too. */
+.sheet-peek {
+  position: fixed;
+  left: 8px;
+  right: 8px;
+  bottom: calc(10px + env(safe-area-inset-bottom));
+  z-index: 26;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 13px 16px;
+  background: linear-gradient(180deg, rgba(20, 22, 34, 0.95), rgba(10, 11, 20, 0.95));
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 210, 122, 0.32);
+  border-radius: 14px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.55);
+  cursor: pointer;
+  animation: peek-up 0.26s cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+@keyframes peek-up {
+  from {
+    opacity: 0;
+    transform: translateY(120%);
+  }
+}
+.peek-label {
+  font-family: var(--serif);
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--fg);
+  white-space: nowrap;
+  flex: none;
+}
+.peek-sub {
+  flex: 1;
+  min-width: 0;
+  color: var(--muted);
+  font-size: 12px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.peek-cue {
+  flex: none;
+  color: var(--gold);
+  font-size: 13px;
+  white-space: nowrap;
+}
+.peek-x {
+  flex: none;
+  background: none;
+  border: none;
+  color: var(--muted);
+  font-size: 24px;
+  line-height: 1;
+  padding: 0 4px;
+  cursor: pointer;
+}
+/* the 「收起」 handle at the top of an expanded mobile sheet (re-collapses to the peek bar) */
+.peek-collapse {
+  display: block;
+  width: 100%;
+  background: none;
+  border: none;
+  color: var(--muted);
+  font-size: 13px;
+  letter-spacing: 0.1em;
+  padding: 0 0 8px;
+  margin: -6px 0 2px;
+  cursor: pointer;
+}
+.peek-collapse:hover {
+  color: var(--gold);
+}
+
 /* ════════════════════════════════════════════════════════════════════════════
    MOBILE / NARROW-SCREEN ADAPTATION (≤600px)
    The desktop layout is a set of fixed-width floating panels (340–384px) anchored
