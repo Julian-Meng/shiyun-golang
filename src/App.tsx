@@ -3,6 +3,7 @@ import { Canvas } from "@react-three/fiber";
 import { EffectComposer, Bloom } from "@react-three/postprocessing";
 import { Galaxy } from "./three/Galaxy";
 import { PoetStars } from "./three/PoetStars";
+import { PoemOrbits } from "./three/PoemOrbits";
 import { GiftLines } from "./three/GiftLines";
 import { PulledStars } from "./three/PulledStars";
 import { FlyControls } from "./three/FlyControls";
@@ -63,6 +64,7 @@ export default function App() {
         <fog attach="fog" args={["#03040a", 2400, 13000]} />
         <Galaxy />
         {loaded && <PoetStars />}
+        {loaded && <PoemOrbits />}
         {loaded && <GiftLines />}
         <PulledStars />
         <FlyControls />

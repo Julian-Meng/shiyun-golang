@@ -14,7 +14,7 @@ import {
 } from "../engine/engineApi";
 import type { FormId } from "../engine/engine";
 import { useStore } from "../state/store";
-import { poetPosition } from "../three/PoetStars";
+import { poetPosition, poemPosition } from "../three/positions";
 import { CopyButton } from "./CopyButton";
 
 const FORM_LABEL: Record<string, string> = {
@@ -73,6 +73,7 @@ export function SearchPanel() {
   const selectPoet = useStore((s) => s.selectPoet);
   const selectPoem = useStore((s) => s.selectPoem);
   const setFlyTarget = useStore((s) => s.setFlyTarget);
+  const pulseAt = useStore((s) => s.pulseAt);
   // dynasty filter (merged in — no separate legend box)
   const hidden = useStore((s) => s.hidden);
   const toggleDynasty = useStore((s) => s.toggleDynasty);
@@ -111,6 +112,11 @@ export function SearchPanel() {
   function goHit(h: LineHit) {
     if (!h.poet) return;
     goPoet(h.poet, { poemIdx: h.poemIdx, title: h.title, firstLine: h.firstLine });
+    // refine the fly-to from the poet centre down to the EXACT poem-planet in that poet's system,
+    // and light a flare there — so 诗句 search lands you on the star, not just the constellation.
+    const pos = poemPosition(h.poet, h.poemIdx);
+    pulseAt(pos, true);
+    setFlyTarget(pos);
   }
 
   // ── 造诗·填字 → 编号 ──────────────────────────────────────────────────────

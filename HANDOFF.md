@@ -134,7 +134,29 @@ node pipeline/build-lexicon.mjs                            # lexicon.json (needs
 
 ## 6. Remaining work (next, roughly in priority)
 
-**DONE — UX iteration round 5 (latest; verified: build + 57/57 + DOM mount; centre confirmed 够散/漂亮 by the user on a real GPU):**
+**DONE — 行星 / poem-orbits feature (latest; verified: build + 57/57 + DOM e2e on 5199; orbit *aesthetics* need a real-GPU pass):**
+- ✅ **Poems are now first-class objects orbiting their poet** — resolves the "click star=poet / click void=poem"
+  asymmetry the user flagged. New **`three/positions.ts`** holds the shared deterministic layout: `poetPosition` (moved
+  here from PoetStars, re-exported for back-compat) + `poemPosition`/`poemOffset` — a poem sits on a golden-angle,
+  area-uniform disc around its poet star, system radius ∝ √poemCount (李白/杜甫 = a full system; a 1-poem poet = a
+  single satellite). The SAME function backs render + 目录 locate + 诗句 search, so a poem-planet is at ONE canonical spot.
+- ✅ **`three/PoemOrbits.tsx`** renders planets; two modes via the HUD **行星** toggle (`store.showAllPoems`, like 赠诗,
+  default OFF — 兼顾高/普通机器):
+    • OFF (普通机器): only the SELECTED poet's poems orbit (≤~3.6k pts, brighter + twinkling) — an on-demand 彩蛋 on poet click.
+    • ON (高性能机器): EVERY poet's poems orbit — ONE 857,877-point Points layer (dim/small), built once when toggled on,
+      disposed when off. Positions need NO new asset (computed from poets.index poemCount; poem TEXT still lazy-loads on click).
+  The layer spins with the shared `galaxySpin.angle` (locked to PoetStars). Verified it builds + renders w/o error in the
+  headless preview; **fps + orbit radius/brightness are the user's real-GPU call** (knobs: `PoemOrbits` `planetMaterial`
+  args + `positions.poemSystemRadius`).
+- ✅ **目录定位** — every poem row in PoetPanel has a 🛸定位 button → flies to that poem's planet + lights a flare
+  (`store.pulseAt` = a flare WITHOUT changing selection, so the panel stays open). Works for the 八大家 and everyone.
+- ✅ **诗句 search → planet** — a 诗句 hit flies to the EXACT poem-planet in the poet's system (not just the poet centre)
+  + flares it (`SearchPanel.goHit`).
+- ⏭ **NOT done: clicking a planet to open the poem** — needs a SEPARATE pick geometry + its own size gate (the poet
+  picker's `sz<4.4px` discard would eat small satellites; can't just reuse the poet picker). Deferred — locate/search
+  cover navigation. Next obvious step for this feature.
+
+**DONE — UX iteration round 5 (verified: build + 57/57 + DOM mount; centre confirmed 够散/漂亮 by the user on a real GPU):**
 - ✅ **造诗 placeholder simplified** — the long hint clipped in the 320px panel; placeholder is now 「粘贴整首诗…」 and the
   拼音/标点 detail moved to the (wrapping) dim helper line so no info is lost. (`SearchPanel`.)
 - ✅ **Centre cross dissolved HARDER (rounds 3–4 were still "太保守")** — `poetPosition` centreBlur range 0.42→0.5 and

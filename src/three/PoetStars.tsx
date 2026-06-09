@@ -2,69 +2,20 @@ import * as THREE from "three";
 import { useEffect, useMemo, useRef } from "react";
 import { useFrame, useThree } from "@react-three/fiber";
 import { Html } from "@react-three/drei";
-import { DYNASTY_BY_KEY, DYNASTIES, DYNASTY_COUNT, bandRadius, hashStr, R_MIN, R_MAX } from "../data/dynasties";
+import { DYNASTY_BY_KEY, DYNASTIES, DYNASTY_COUNT, hashStr } from "../data/dynasties";
 import { getPoets, type PoetRow } from "../data/load";
 import { FAMOUS_POETS } from "../data/famousPoets";
 import { useStore } from "../state/store";
 import { pickTargets } from "./picking";
 import { createGpuPicker, encodePickColor, POET_SIZE_SCALE } from "./gpuPick";
-import { GALAXY, gauss3, galaxySpin, spinXZ } from "./galaxyParams";
+import { galaxySpin, spinXZ } from "./galaxyParams";
+import { poetPosition } from "./positions";
+
+export { poetPosition }; // back-compat: callers still import poetPosition from PoetStars
 
 // Iconic poets → brighter + larger landmark stars (a sense of "明星" distinction).
 const FAMOUS = new Set(FAMOUS_POETS.map((f) => f.name));
 const WHITE = new THREE.Color("#ffffff");
-
-// Deterministic galaxy position. Mean radius = dynasty shell (time = depth) but with a GAUSSIAN
-// radial spread that BLEEDS into neighbouring dynasty bands, so the colours blend into a gradient
-// instead of hard concentric rings; angle is biased onto the spiral arms (same arms as the
-// backdrop). Y uses a thicker gaussian that swells toward the centre (bulge) for visual depth.
-export function poetPosition(p: PoetRow): [number, number, number] {
-  const dyn = DYNASTY_BY_KEY[p.dynasty] ?? DYNASTIES[DYNASTY_COUNT - 1];
-  const [inner, outer] = bandRadius(dyn.id);
-  const h = hashStr(p.id + p.name);
-  const center = (inner + outer) / 2;
-  const width = outer - inner;
-  const ra = ((h >>> 2) & 0xff) / 255, rb = ((h >>> 10) & 0xff) / 255, rc = ((h >>> 18) & 0xff) / 255;
-  let rr = center + gauss3(ra, rb, rc) * width * 1.5; // σ ≈ 1 band → adjacent dynasty colours blend
-  rr = Math.max(R_MIN * 0.35, Math.min(R_MAX * 1.06, rr));
-  const t = rr / GALAXY.RADIUS;
-  const branch = ((h % GALAXY.BRANCHES) / GALAXY.BRANCHES) * Math.PI * 2;
-  const twist = t * GALAXY.TWIST;
-  const a = ((h >>> 3) & 0xff) / 255, b = ((h >>> 11) & 0xff) / 255, cc = ((h >>> 19) & 0xff) / 255;
-  // tight arm σ → poets concentrate ONTO the same 4 spiral arms as the backdrop (woven in,
-  // not a separate ring layer); the dynasty colour then reads as a gradient ALONG the arms.
-  const armDev = gauss3(a, b, cc) * GALAXY.ARM_SPREAD * 0.45;
-  // Near the centre the 4 arms converge into a hard CROSS/X. Spread poets fully azimuthally there
-  // (strong at the core, gone by t≈0.42) so the centre reads as a ROUND bulge blended into the
-  // diffuse galaxy core — not a stark cross of dots. Keeps the spiral arms intact further out.
-  const az = ((h >>> 24) & 0xff) / 255;
-  // Wider, stronger azimuthal dissolve: full random angle over the whole core out to t≈0.5
-  // (was 0.42) so the 4-arm X is gone and the centre reads as a filled round disc, not a cross.
-  const centerBlur = Math.max(0, 0.5 - t) / 0.5; // 1 at core → 0 by t=0.5
-  const ang = branch + twist + armDev + (az - 0.5) * Math.PI * 2 * centerBlur;
-  const ya = ((h >>> 5) & 0xff) / 255, yb = ((h >>> 13) & 0xff) / 255, yc = ((h >>> 21) & 0xff) / 255;
-  const bulge = 1 + Math.max(0, 0.45 - t) * 2.6; // taller near the centre, thin at the rim
-  const y = gauss3(ya, yb, yc) * rr * GALAXY.THICKNESS * 2.1 * bulge;
-  // in-plane x/z scatter (like the backdrop's `scatter`): gives each arm real width so the
-  // poet layer is a volumetric ribbon, NOT a thin sheet that reads as a wall edge-on.
-  const h2 = hashStr(p.name + "#" + p.id);
-  const sxu = ((h2 >>> 2) & 0xff) / 255, sxs = ((h2 >>> 10) & 0xff) / 255;
-  const szu = ((h2 >>> 18) & 0xff) / 255, szs = ((h2 >>> 26) & 0xff) / 255;
-  const scat = (u: number, sgn: number) => Math.pow(u, 2.2) * (sgn < 0.5 ? -1 : 1) * 0.22 * rr;
-  // The rr-scaled scatter shrinks to ~0 near the centre, so the core stays a tight concentrated
-  // shape. Add a strong ABSOLUTE in-plane x/z scatter that peaks at the core and fades by t≈0.5,
-  // dissolving the centre into a diffuse round cloud (round-5 feedback — push it HARD: fill the
-  // whole central region, no inter-arm dark wedges). Tune `0.22` on a real GPU if it over/under-fills.
-  const cs = Math.max(0, 0.5 - t) / 0.5; // 1 at core → 0 by t=0.5 (wider band)
-  const coreScat = cs * cs * GALAXY.RADIUS * 0.22; // ~1.5× the round-4 fill radius
-  const cjx = (((h2 >>> 5) & 0xff) / 255 - 0.5) * 2;
-  const cjz = (((h2 >>> 13) & 0xff) / 255 - 0.5) * 2;
-  return [
-    Math.cos(ang) * rr + scat(sxu, sxs) + cjx * coreScat,
-    y,
-    Math.sin(ang) * rr + scat(szu, szs) + cjz * coreScat,
-  ];
-}
 
 export function PoetStars() {
   const hidden = useStore((s) => s.hidden);

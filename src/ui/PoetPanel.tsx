@@ -3,6 +3,7 @@ import { useStore } from "../state/store";
 import { DYNASTY_BY_KEY } from "../data/dynasties";
 import { textBabelIndex, anyTextIndex } from "../engine/engineApi";
 import type { FormId } from "../engine/engine";
+import { poemPosition } from "../three/positions";
 import { ShareButton } from "./CopyButton";
 
 const FORM_LABEL: Record<string, string> = {
@@ -44,6 +45,8 @@ export function PoetPanel() {
   const poems = useStore((s) => s.poetPoems);
   const focus = useStore((s) => s.poetFocus);
   const close = useStore((s) => s.clearPoet);
+  const setFlyTarget = useStore((s) => s.setFlyTarget);
+  const pulseAt = useStore((s) => s.pulseAt);
 
   const [expanded, setExpanded] = useState<Set<number>>(new Set());
   const [shown, setShown] = useState(PAGE);
@@ -92,6 +95,15 @@ export function PoetPanel() {
       return next;
     });
   }
+  // 目录定位: fly to this poem's planet (a fixed, deterministic spot in the poet's orbit) + light a
+  // flare there — without collapsing the panel or changing the selected poet. `i` is the poem's
+  // original index, which matches PoemOrbits' per-poem layout, so the flare lands on the right planet.
+  function locatePoem(i: number) {
+    if (!poet) return;
+    const pos = poemPosition(poet, i);
+    pulseAt(pos, true);
+    setFlyTarget(pos);
+  }
 
   return (
     <div className="poet-panel">
@@ -119,6 +131,13 @@ export function PoetPanel() {
                     {isHit && <span className="pi-hit">搜的这首</span>}
                   </span>
                   <span className="pi-form">{FORM_LABEL[pm.f]}</span>
+                  <button
+                    className="pi-locate"
+                    title="飞到这首诗的行星 · 点亮"
+                    onClick={(e) => { e.stopPropagation(); locatePoem(i); }}
+                  >
+                    🛸定位
+                  </button>
                   <LazyCopy compute={() => indexFor(i)?.index ?? null} label="复制编号" />
                 </div>
                 {isOpen && (

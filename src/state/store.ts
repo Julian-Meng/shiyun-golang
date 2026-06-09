@@ -28,6 +28,9 @@ interface State {
   poetFocus: { poemIdx: number; title: string; firstLine: string } | null; // poem to surface (诗句 search)
   // 赠诗 network
   showGifts: boolean;
+  // poem "planets": when ON, every poet shows ALL their poems as orbiting planets (高性能);
+  // when OFF, only the selected poet's poems orbit (on-demand 彩蛋). Like 赠诗, a visual toggle.
+  showAllPoems: boolean;
   // render quality (scales galaxy particle counts + bloom for weak GPUs)
   quality: "high" | "low";
   // hide ALL overlay UI (screenshot mode) — toggled by a corner button + the H hotkey
@@ -45,12 +48,14 @@ interface State {
   showAllDynasties: () => void;
   showOnly: (keys: string[]) => void;
   selectPoem: (p: PulledPoem) => void;
+  pulseAt: (pos: [number, number, number], valid: boolean) => void; // flare a point WITHOUT changing selection
   clearSelection: () => void;
   setHover: (id: string | null) => void;
   selectPoet: (p: PoetRow, focus?: { poemIdx: number; title: string; firstLine: string } | null) => void;
   setPoetPoems: (id: string, poems: PoemRecord[]) => void;
   clearPoet: () => void;
   toggleGifts: () => void;
+  toggleAllPoems: () => void;
   toggleQuality: () => void;
   toggleGravity: () => void;
   toggleUI: () => void;
@@ -75,6 +80,7 @@ export const useStore = create<State>((set) => ({
   poetPoems: null,
   poetFocus: null,
   showGifts: false,
+  showAllPoems: false,
   quality: "high",
   uiHidden: false,
   gravity: true,
@@ -101,6 +107,8 @@ export const useStore = create<State>((set) => ({
       poetFocus: null,
       pulls: [...s.pulls, { id: _pullSeq++, pos: p.pos, valid: p.valid }].slice(-MAX_PULLS),
     })),
+  pulseAt: (pos, valid) =>
+    set((s) => ({ pulls: [...s.pulls, { id: _pullSeq++, pos, valid }].slice(-MAX_PULLS) })),
   clearSelection: () => set({ selected: null }),
   setHover: (hoverPoetId) => set({ hoverPoetId }),
   selectPoet: (selectedPoet, focus = null) =>
@@ -109,6 +117,7 @@ export const useStore = create<State>((set) => ({
     set((s) => (s.selectedPoet?.id === id ? { poetPoems: poems } : {})),
   clearPoet: () => set({ selectedPoet: null, poetPoems: null, poetFocus: null }),
   toggleGifts: () => set((s) => ({ showGifts: !s.showGifts })),
+  toggleAllPoems: () => set((s) => ({ showAllPoems: !s.showAllPoems })),
   toggleQuality: () => set((s) => ({ quality: s.quality === "high" ? "low" : "high" })),
   toggleGravity: () => set((s) => ({ gravity: !s.gravity })),
   toggleUI: () => set((s) => ({ uiHidden: !s.uiHidden })),

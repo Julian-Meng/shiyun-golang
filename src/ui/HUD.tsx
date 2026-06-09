@@ -19,6 +19,8 @@ export function HUD() {
   const toggleLushi = useStore((s) => s.toggleLushi);
   const showGifts = useStore((s) => s.showGifts);
   const toggleGifts = useStore((s) => s.toggleGifts);
+  const showAllPoems = useStore((s) => s.showAllPoems);
+  const toggleAllPoems = useStore((s) => s.toggleAllPoems);
   const quality = useStore((s) => s.quality);
   const toggleQuality = useStore((s) => s.toggleQuality);
   const gravity = useStore((s) => s.gravity);
@@ -68,6 +70,13 @@ export function HUD() {
           title="显示诗人之间的赠答网络（寄/赠/和/次韵），选中诗人可高亮其往来"
         >
           赠诗
+        </button>
+        <button
+          className={showAllPoems ? "filter on" : "filter"}
+          onClick={toggleAllPoems}
+          title="行星：把每位诗人的全部作品显示为环绕他的行星（85万颗，建议高性能机器）。关闭时只在点击某位诗人后显示他的行星"
+        >
+          行星
         </button>
         <button
           className={gravity ? "filter on" : "filter"}

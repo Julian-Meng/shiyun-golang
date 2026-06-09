@@ -833,6 +833,20 @@ canvas {
   white-space: nowrap;
   margin-left: 0;
 }
+.pi-row .pi-locate {
+  flex: none;
+  white-space: nowrap;
+  background: rgba(130, 180, 255, 0.12);
+  border: 1px solid rgba(130, 180, 255, 0.42);
+  border-radius: 5px;
+  color: #bcd4ff;
+  font-size: 10px;
+  padding: 1px 7px;
+  cursor: pointer;
+}
+.pi-row .pi-locate:hover {
+  background: rgba(130, 180, 255, 0.24);
+}
 .pi-detail {
   padding: 2px 2px 8px 17px;
   animation: rise 0.2s ease;
