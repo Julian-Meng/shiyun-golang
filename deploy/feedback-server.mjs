@@ -18,15 +18,23 @@
 //
 // Deploy: bind to 127.0.0.1 and put nginx in front (same-origin /api/feedback → no CORS at all);
 // see docs/DEPLOY.md §5 for the nginx location + systemd unit.
+//
+// OPTIONAL: dynamic OG share cards (docs/DEPLOY.md §6). Set SITE_ROOT=<built dist/> and nginx routes
+//   GET /?a=… / GET /?p=…  here; we return index.html with the OG/Twitter title+description swapped
+//   per target (server-side, so crawlers see the right card). SITE_ROOT unset → those routes 404
+//   exactly as before, so existing deployments are unaffected. index.html + poets.index.json are read
+//   ONCE at boot into memory; every request is O(1) string work, never a per-request file read.
 import { createServer } from "node:http";
 import { appendFile, mkdir, readFile } from "node:fs/promises";
-import { dirname } from "node:path";
+import { dirname, join } from "node:path";
 import { createHash, timingSafeEqual } from "node:crypto";
+import { injectOg, buildPoetMap } from "./og-inject.mjs";
 
 const PORT = Number(process.env.PORT || 8787);
 const HOST = process.env.HOST || "127.0.0.1";
 const FILE = process.env.FEEDBACK_FILE || "./feedback.jsonl";
 const TOKEN = process.env.FEEDBACK_TOKEN || ""; // empty → GET listing disabled
+const SITE_ROOT = process.env.SITE_ROOT || ""; // empty → dynamic OG disabled (GET / stays 404)
 const MAX_BODY = 16 * 1024; // 16 KB is plenty for a 5000-char message
 const MAX_MSG = 5000;
 
@@ -51,6 +59,23 @@ const sha = (s) => createHash("sha256").update(String(s)).digest();
 const tokenOk = (presented) => !!TOKEN && timingSafeEqual(sha(presented), sha(TOKEN));
 
 await mkdir(dirname(FILE), { recursive: true }).catch(() => {});
+
+// Dynamic OG: load the built index.html + the poet index ONCE at boot (never per-request). If
+// SITE_ROOT is unset OR the files are missing/unreadable, OG_HTML stays null and GET / stays 404 —
+// the feedback routes are entirely unaffected. The poet index is ~2.8 MB → an id→row Map in memory.
+let OG_HTML = null; // the built index.html string, or null when dynamic OG is disabled
+let OG_POETS = new Map(); // id → poet row
+if (SITE_ROOT) {
+  try {
+    OG_HTML = await readFile(join(SITE_ROOT, "index.html"), "utf8");
+    const arr = JSON.parse(await readFile(join(SITE_ROOT, "data", "poets.index.json"), "utf8"));
+    OG_POETS = buildPoetMap(arr);
+    console.log(`dynamic OG enabled: ${OG_POETS.size} poets from ${SITE_ROOT}`);
+  } catch (e) {
+    OG_HTML = null; // any failure → silently disable (the routes 404, static behavior is untouched)
+    console.warn(`SITE_ROOT set but dynamic OG disabled (load failed): ${e?.message || e}`);
+  }
+}
 
 createServer(async (req, res) => {
   // the Host header is attacker-controlled — an invalid one (`Host: a b`) makes new URL throw,
@@ -104,6 +129,25 @@ createServer(async (req, res) => {
       }
     });
     return;
+  }
+
+  // Dynamic OG share card: GET / (root only) with ?a= or ?p=. Disabled (→ falls through to 404,
+  // exactly as today) when SITE_ROOT is unset/unloadable. The url is already parsed defensively above
+  // (a hostile Host can't reach here — new URL threw → 400). Query values are length-capped + escaped
+  // inside injectOg; the raw input is never echoed. Crawler traffic, O(1) string work → no rate limit.
+  if (OG_HTML && req.method === "GET" && path === "") {
+    const a = url.searchParams.get("a");
+    const p = url.searchParams.get("p");
+    if (a != null || p != null) {
+      // og:url mirrors the request (same target) so crawlers canonicalize to it; built from the
+      // already-validated URL (origin + path + query), never from raw header concatenation.
+      const ogUrl = `${url.origin}${url.pathname}${url.search}`;
+      const { html } = injectOg(OG_HTML, { a, p }, OG_POETS, ogUrl);
+      return res
+        .writeHead(200, { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "public, max-age=3600" })
+        .end(html);
+    }
+    // GET / with no a/p → not our concern; fall through to 404 (nginx serves static index.html).
   }
 
   json(res, 404, { error: "not found" });

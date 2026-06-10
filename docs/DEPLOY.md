@@ -230,3 +230,82 @@ panel (a failure is silently tolerated and the message still lands in localStora
 > endpoint satisfies the same client contract — a Cloudflare Worker+KV or Formspree URL in
 > `VITE_FEEDBACK_ENDPOINT` works (those are third-party: get the owner's sign-off first, send permissive
 > CORS, and do NOT store IPs).
+
+## 6. Optional: 动态 OG 分享卡 (per-target share previews)
+
+**不部署 / 不改 nginx 时,纯静态行为与今天完全一致** — this whole section is opt-in and touches nothing
+when off.
+
+**The problem.** A shared link is hash-based (`#a=<poetId>` / `#p=<index>`). Crawlers (WeChat / Twitter /
+Telegram) and servers **never see the fragment**, so every shared link previews the same generic `og.jpg`.
+
+**The fix (two halves, both already in the build):**
+1. `src/state/permalink.ts` now **mirrors** the target into the query string: the address bar reads
+   `/?a=<poetId>#a=<poetId>` (resp. `?p=…#p=…`). The **hash stays canonical** (old pure-hash links restore
+   bit-for-bit); the query exists only so a server/crawler can see the target. All 分享/复制 buttons read
+   `location.href`, which now carries both. Nothing here needs a server — it ships in the static bundle.
+2. The **existing** feedback collector ([deploy/feedback-server.mjs](../deploy/feedback-server.mjs)) gains
+   ONE optional route: with `SITE_ROOT` set, `GET /?a=…` / `GET /?p=…` returns `index.html` with
+   `og:title` / `og:description` / `twitter:*` (+ `og:url`) swapped **per target** (`og:image` stays as
+   built). `SITE_ROOT` unset → that route 404s exactly as before; **the `/api/feedback` POST/GET behavior is
+   byte-for-byte unchanged**. The injector ([deploy/og-inject.mjs](../deploy/og-inject.mjs), zero-dep, unit
+   -tested) HTML-escapes every value, length-caps the query before lookup, and only ever rewrites the
+   `content="…"` of the known meta tags — raw input is never echoed.
+
+### 6a. Enable on the server (extend the running collector)
+
+The collector is already up from §5a — just add the env var and copy the new files:
+
+```bash
+sudo cp deploy/feedback-server.mjs deploy/og-inject.mjs /opt/shiyun/     # both, og-inject is imported
+# add ONE line to the systemd unit so the server can read the built dist/:
+sudo systemctl edit shiyun-feedback        # OR edit /etc/systemd/system/shiyun-feedback.service
+#   add under [Service]:
+#     Environment=SITE_ROOT=/var/www/shiyun/dist
+sudo systemctl daemon-reload && sudo systemctl restart shiyun-feedback
+# the log should now print:  dynamic OG enabled: 32657 poets from /var/www/shiyun/dist
+```
+
+`SITE_ROOT` must point at the **built `dist/`** (it reads `dist/index.html` + `dist/data/poets.index.json`,
+ONCE at boot, into memory — never per request). If either file is missing the server logs a warning and the
+OG route simply 404s (feedback unaffected).
+
+### 6b. nginx — route only `/` WITH `?a=`/`?p=` to the backend
+
+In the site `server {}` block ([deploy/nginx.conf](../deploy/nginx.conf)), the `location = /` already
+proxies to the node backend **only** when `$arg_a` or `$arg_p` is present, else serves the static
+`index.html`:
+
+```nginx
+location = / {
+    if ($arg_a) { proxy_pass http://127.0.0.1:8787; }
+    if ($arg_p) { proxy_pass http://127.0.0.1:8787; }
+    proxy_set_header Host $host;
+    try_files /index.html =404;   # no a/p (and no proxy) → static index.html, exactly as today
+}
+```
+
+`proxy_pass` **without** a URI part is the `if`-safe form. Reload nginx after editing
+(`sudo nginx -t && sudo systemctl reload nginx`).
+
+### 6c. Verify
+
+```bash
+# on the box (bypassing nginx) — want the poet's name in og:title:
+curl -s 'http://127.0.0.1:8787/?a=82a5851c' | grep 'og:title'
+#   <meta property="og:title" content="李白 — 诗云 · Poetry Cloud" />
+curl -s 'http://127.0.0.1:8787/?p=12345' | grep 'og:title'
+#   <meta property="og:title" content="诗云 · 一首可能的诗" />
+# a plain GET / (no a/p) still 404s on the backend (nginx serves it statically):
+curl -s -o /dev/null -w '%{http_code}\n' 'http://127.0.0.1:8787/'        # 404
+# unknown id → UNMODIFIED index.html (the generic card), 200:
+curl -s 'http://127.0.0.1:8787/?a=ffffffff' | grep 'og:title'            # the generic title
+# through nginx (real share URL):
+curl -s 'https://你的域名/?a=82a5851c' | grep 'og:title'
+```
+
+If you never add this block (or never set `SITE_ROOT`), `/` is served statically and sharers get the
+generic card — **纯静态行为与今天完全一致**. (Note: once the `if`-proxy block IS in place, a `/?a=…`
+request while the backend is *down* returns a 502 for that one request — add `proxy_intercept_errors on;`
++ an `error_page 502 = @static;` named location if you want it to fall back to static instead. The static
+SPA at every other path is never affected either way.)
