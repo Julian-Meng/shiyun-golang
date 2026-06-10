@@ -10,6 +10,28 @@ real GPU. Data dirs (`poems/`, `lines/`) are git-ignored — see HANDOFF "data p
 
 ---
 
+## 2026-06-10 — Session: 9th agent · round 2 (留影直达 + 改名)
+
+Owner report: 搜索诗人后,目录里无法对某一首诗单独开分享卡,只能绕道编号反查;并要求改名 奇迹时刻→留影.
+Root cause: Cinema 取诗只认 虚空 `selected` 或 `focus.poemIdx`(后者只有行星点击/诗句命中才设),
+目录的"展开"是 PoetPanel 本地状态,Cinema 看不见 —— 面板按钮旧提示「展开一首诗后可框住那首」名不副实。
+Opus 4.8 执行,orchestrator 复核门禁:tsc · **138 tests**(+15)· build。Commit `b3d32ba`.
+
+- **留影目录直框**(`store.ts` + `Cinema.tsx` + `PoetPanel.tsx`):诗人目录每一行新增「留影」按钮(与
+  定位/复制编号 并排,传原始索引 `i`,与定位同源,排序不影响),点一下即把那首框成分享卡。
+- **显式留影目标**(`store.cinemaPoemIdx` + `openCinemaFor`):优先级高于虚空 `selected` 与搜索 `focus`;
+  关闭留影 / 换诗人 / 虚空捞诗 / 清空 都复位,绝不残留上一首。`selected`/`selectedPoet` 在 store 里本就
+  互斥(双向确认),显式分支放最前是防御性设计。
+- **解析抽纯函数**(`ui/cinemaResolve.ts` NEW):`resolveCinemaPoem` 把「显式 idx > 虚空 > 搜的这首」三级
+  优先级独立出来,注入 indexer → 无 Canvas、无数据集可单测。
+- **奇迹时刻 → 留影**:用户可见文案全部改名(诗人/虚空面板按钮、退出标题、面板按钮提示改为实情:
+  「留影当前搜中的那首;目录里每一行也有单独的留影」);代码标识(`cinema*`/`.cinema-btn`)与历史
+  DEVLOG/HANDOFF 条目不动。README/index.html 无出现(grep 验证)。
+- 样式:`.pi-cinema` 行内按钮(金色点缀,随 `.pi-locate` 尺寸),并入 coarse-pointer ≥40px 触控规则。
+- 测试 +15(123→**138**):openCinemaFor / 关闭复位 / 换诗人清空 / 互斥 / 解析优先级 / 越界与 idx=0。
+
+---
+
 ## 2026-06-10 — Session: 9th agent (orchestrated — vite 8 升级 · 动态 OG 分享卡 · 数据 v3 调研 NO-GO)
 
 Orchestrator-only main loop (fable-5); all execution delegated to Opus 4.8 sub-agents (成本嘱咐).

@@ -13,7 +13,9 @@ never stored* (every poem ⇄ a big-integer index, bijectively).
 > 全保留。**(2) 动态 OG 分享卡** — 分享链接加 query 镜像(`/?a=…#a=…`,hash 仍正典、旧链接逐字节兼容);
 > `feedback-server.mjs` 可选 `SITE_ROOT` 模式按诗人注入 og/twitter meta(`deploy/og-inject.mjs` 纯函数 + 测试;
 > 不设则一切照旧),nginx 条件反代 + **DEPLOY §6** 运维照抄。**(3) 数据 v3 调研 → NO-GO**(语料源已饱和、唯一
-> 大候选无作者字段;见 DATA_AUDIT.md 补记)。现在 **123 tests** 全绿(+30)。
+> 大候选无作者字段;见 DATA_AUDIT.md 补记)。**(4) 留影(round 2)** — 奇迹时刻全面改名「留影」,且诗人目录
+> **每行诗都能直接留影**(`store.openCinemaFor`/`cinemaPoemIdx`,显式目标 > 虚空 > 搜索命中,关闭/换诗人即
+> 复位;解析抽成纯函数 `ui/cinemaResolve.ts`)——之前只能绕道编号反查。现在 **138 tests** 全绿。
 >
 > **▶ Status (2026-06-10, 8th agent · round 5 — post-launch P0/P1/P2):** **(1) 别名搜索** — 搜「陶渊明/李太白/
 > 苏东坡」命中本名行;庄子/诸葛亮/三字经 落空时给体面解释 (`src/data/poetAliases.ts` + integrity test)。
@@ -94,7 +96,7 @@ bundle at `C:\Users\Cohen\Desktop\shiyun-ALL-branches-backup.bundle` (restore: `
 ```bash
 npm install
 npm run dev        # vite → http://localhost:5199 (strictPort)
-npm test           # vitest: 123 tests (47 engine + 6 engineApi + 4 load + 11 GPU-pick + 21 touch-gesture + 4 alias + 13 permalink + 17 og-inject)
+npm test           # vitest: 138 tests (47 engine + 6 engineApi + 4 load + 11 GPU-pick + 21 touch-gesture + 4 alias + 13 permalink + 17 og-inject + 15 cinema/留影)
 npm run deploy:build  # build + precompress for a static host (see docs/DEPLOY.md) — Range-safe
 npm run build      # tsc --noEmit && vite build  (the real verify gate)
 npm run typecheck
@@ -140,7 +142,7 @@ drei 9 / three 0.169 + zustand 5. **100% static + exactly ONE optional backend**
 | **自适应画质 / 性能** (7th) | `three/detectQuality.ts` (`COARSE`/`WEAK`, evaluated once at load): weak/touch devices default `画质·低` + cap `dpr` to 1.5 + bloom off, and the ~857k-point `行星·全部` layer is gated off (manual 画质 toggle still forces 高). |
 | **响应式布局** (7th) | One `@media(max-width:600px)`: transient panels → 全宽 bottom-sheets; 搜索 stays top tracking a live `--hud-h` (ResizeObserver); HUD wraps/trims; 16px inputs (no iOS zoom-on-focus); `dvh` + `env(safe-area-inset-*)`; ≥40px tap targets on coarse pointers. |
 | **手机面板折叠** (7th) | On touch, 诗人/虚空诗 panels + 搜索 default to a bottom **peek bar** (一行摘要 + 「▲ 展开」); tap to open, 「▾ 收起」 back. Re-collapses per new selection. Never auto-covers the galaxy. `ui/useSheet.ts` + `.sheet-peek`. Desktop unchanged. |
-| **奇迹时刻 / 分享卡** (7th) | 📷 button (诗/诗人面板) → a framed share card over the **FROZEN** scene (spin + void-pull + highlight lifecycles paused; manual camera still composable) with a cyclable concept tagline (5) + the poem rendered **竖排 right-to-left, one column per line** (`writing-mode: vertical-rl` — long poems never clip) + its 全集编号; exit is a **red top-left** button. `ui/Cinema.tsx`, `store.cinema`. |
+| **留影 / 分享卡** (7th; renamed from 奇迹时刻 + per-poem 目录直达, 9th) | 留影 button (诗/诗人面板) **+ 诗人目录每行的「留影」** (`store.openCinemaFor(i)`, explicit target wins over void/focus, resets on close/poet-change — `ui/cinemaResolve.ts`) → a framed share card over the **FROZEN** scene (spin + void-pull + highlight lifecycles paused; manual camera still composable) with a cyclable concept tagline (5) + the poem rendered **竖排 right-to-left, one column per line** (`writing-mode: vertical-rl` — long poems never clip) + its 全集编号; exit is a **red top-left** button. `ui/Cinema.tsx`, `store.cinema`. |
 | **更多 菜单 + 关于/反馈** (7th) | HUD 设置→**更多** (`ui/SettingsMenu.tsx`): + 个人主页 `cohenjikan.com` / `GitHub` links + an in-page **反馈** box (localStorage, ≤5000 汉字). Owner reads via a hidden gesture — **5 taps on the 诗云 logo in 10 s** → `ui/FeedbackViewer.tsx`. ⚠ localStorage = per-device; `state/feedback.ts::submitFeedback` is the seam to repoint at a form service for cross-visitor collection at deploy. |
 
 Three pull modes to feel the project: plain random「牛蝛茙漂綵」→ 格律「趰㵎憣烔岆」→ 格律+常用字
