@@ -60,6 +60,13 @@ count** (no formal cross-source dedup).
   (N=12,877 byte-identical → every existing 编号 permalink stable): +75,980 poems / +2,849 poets after
   cross-source dedup (3,016), junk-folder filter (125) and charset gate (1,597 skipped). New totals:
   **32,657 poets / 933,857 poems**. 余秀华(249)/顾城(489)/海子(323)/食指(43) now in. See PIPELINE.md.
+- ❌ **Further 当代/现代 expansion (v3) — NO-GO (调研 2026-06-10, 9th agent).** The contemporary-corpus space
+  is saturated by the exact upstreams v2 already ingested (sheepzh / yuxqiu / poemwiki scrapes). The only
+  larger artifact, HF `Iess/chinese_modern_poetry`, is a re-scrape of sheepzh reshaped into LLM training
+  pairs (`uuid/prompt/response`) with **no 作者 field** → cannot attach to the per-poet galaxy, near-zero
+  net new poems after dedup, higher charset skip-rate (est. 3–6%), worse copyright exposure. THUNLP-AIPoet
+  is academic-license + classical; poemwiki has no bulk artifact/license. **Reconsider only if** a new,
+  author-attributed, permissively-licensed contemporary corpus appears, or the app drops the per-poet model.
 - **Honest count** → one `(normalized 作者+内容)` exact-dedup pass + 互见 clustering + 无名氏 special-casing, to publish a distinct-poem count (classical layer).
 - **Do NOT chase 明/清 completeness** — no acquirable source exists. Don't switch to ORCHESTRA/搜韵 unless the app pivots to *maximize classical count* AND accepts Traditional + a non-commercial license.
 

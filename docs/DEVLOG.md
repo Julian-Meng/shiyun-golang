@@ -10,6 +10,50 @@ real GPU. Data dirs (`poems/`, `lines/`) are git-ignored — see HANDOFF "data p
 
 ---
 
+## 2026-06-10 — Session: 9th agent (orchestrated — vite 8 升级 · 动态 OG 分享卡 · 数据 v3 调研 NO-GO)
+
+Orchestrator-only main loop (fable-5); all execution delegated to Opus 4.8 sub-agents (成本嘱咐).
+Verify gate independently re-run by the orchestrator on the combined tree: tsc · **123 tests** (was 93,
++30 new) · build · deploy:build. Commits `f723db8` (vite 8) + `85cac49` (OG) + this docs commit.
+
+**1 — 依赖升级 P2 清账:vite 8 / vitest 4 / plugin-react 6** (`f723db8`)
+- 清掉全部 5 个安装期 npm-audit 漏洞(1 critical:vitest-UI 任意文件读取 + 4 moderate:esbuild/vite
+  dev-server),全在 vite≤6 dev 链上(round-5 P2 暂缓项)。生产依赖一字未动(react 18 / three 0.169 /
+  fiber 8 / drei 9 / zustand 5 / postprocessing 2.19)。`npm audit` → **0**;依赖树 182→139 包。
+- **Rollup→Rolldown 迁移**:vite 8 弃用对象式 `manualChunks`,且会把"唯一引用方"chunk 合并(three+r3f
+  塌成 ~950 KB 触发 700 KB 警告)。改用 `rolldownOptions.output.codeSplitting.groups` + `priority`
+  (three=2 / r3f=1)→ 恢复 vite-5 同款三段切分(three 675.5 KB / r3f 276.9 KB / index 181.7 KB),无警告。
+- **tsconfig `types` 补 `"node"`**:vite 8 的 `vite/client` 不再间接引用 `@types/node`,`*.test.ts` 里
+  `node:fs`/`node:url` 报 TS2307。
+- **测试零改动**:vitest 2→4,6 个既有测试文件只用 `describe/it/expect/beforeAll` —— 93/93 未改一行。
+- 保留项全部验证:5199 strictPort、`__OG_ORIGIN__` 构建期替换(built dist 0 残留)、chunk 警告限额注释、
+  precompress(容忍轻量 data 目录)。冒烟走 5198 端口(不碰用户在看的 5199,未用 preview MCP)。
+
+**2 — 动态 OG 分享卡** (`85cac49`, `permalink.ts` + `deploy/og-inject.mjs` NEW + `feedback-server.mjs` + nginx + DEPLOY §6)
+- **问题**:分享链接是纯 hash(`#a=`/`#p=`),爬虫看不见 fragment → 每条分享都预览同一张通用 og.jpg。
+- **Query 镜像**:`permalink.ts` 把目标镜像进 query(`/?a=…#a=…`),hash 仍是权威还原机制;boot 时无 hash
+  则回退读 query;清空选择剥离 a/p 但保留无关参数(utm…);旧纯 hash 链接逐字节兼容。纯函数
+  `buildShareUrl`/`parseTarget` 抽出 + 13 单测。
+- **服务端注入(可选,零依赖)**:复用唯一后端 `feedback-server.mjs` —— 设 `SITE_ROOT` 后 `GET /?a=/?p=`
+  返回按目标改写 og/twitter 标题+描述的 index.html(诗人卡:「李白 — 诗云 · Poetry Cloud / 唐 · 1107 首 ·
+  在三维诗云星图中漫游他的星团」;`?p=` 服务端无法 unrank(引擎在客户端 BigInt)→ 通用卡 + 编号截断)。
+  index.html + poets.index.json 启动时一次载入,绝无逐请求 I/O;`Cache-Control: public, max-age=3600`。
+  **不设 `SITE_ROOT` → 路由照旧 404,`/api/feedback` 字节不变;不部署/不改 nginx → 纯静态行为与今天完全一致。**
+- **安全(round-6 教训延续)**:注入值全 HTML 转义(敌意名 fixture 验证);query 先封顶(诗人 id≤64 hex、
+  编号≤4000 位)再查表;锚定正则只改写已知 meta 的 content,绝不回显输入;Host-DoS 仍 400 不崩(冒烟复测)。
+- **nginx**:`location = /` 仅当 `$arg_a`/`$arg_p` 存在时反代 127.0.0.1:8787(if-safe proxy_pass),否则静态。
+  DEPLOY 新 §6:systemd `Environment=SITE_ROOT=…`、og-inject.mjs 一并拷贝、nginx 片段、验证 curl。
+- 测试:og-inject 纯函数单测 + 1 spawn 冒烟(随机端口 + tmp SITE_ROOT:注入 200 / Host-DoS 400 /
+  反馈 POST 仍可用)。合计 **123 全绿**。
+
+**3 — 数据 v3(当代诗人扩充)调研 → NO-GO**(只读调研,无代码变更;详见 DATA_AUDIT.md 补记)
+- 当代/现代语料源已饱和:所有可寻候选都追溯到 v2 已吃下的上游(sheepzh / yuxqiu / poemwiki)。
+- 唯一更大候选 HF `Iess/chinese_modern_poetry` 是 sheepzh 二次抓取重塑的 LLM 训练对,**无作者字段** →
+  挂不上"每诗人一颗星"模型,去重后净增≈0,字库跳过率预计更高(3–6%),版权暴露更差。
+- 收益≈0(当代名家 v2 已全在)vs 成本(数小时重建 + main 镜像 + ~201 资产冷备重传)→ **维持 v2**。
+
+---
+
 ## 2026-06-10 — Session: 8th agent · round 6 (adversarial review of round 5 — fixes)
 
 A multi-agent adversarial review of round 5's commit (2508b5a) ran in the cloud; it surfaced a critical

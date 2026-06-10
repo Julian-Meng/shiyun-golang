@@ -7,6 +7,14 @@ Inspired by 刘慈欣《诗云》 + 博尔赫斯《巴别图书馆》: a roamabl
 is a star and the void between them is **every possible poem**, pulled out on click — *computed,
 never stored* (every poem ⇄ a big-integer index, bijectively).
 
+> **▶ Status (2026-06-10, 9th agent — orchestrated round: vite 8 · 动态 OG · v3 NO-GO):** **(1) vite 8 /
+> vitest 4 / plugin-react 6** — round-5 暂缓的 P2 清账:5 个 dev 链漏洞 → `npm audit` **0**;Rollup→Rolldown
+> 迁移保住 three 独立 chunk(675 KB < 700 限额);93 测试零改动;5199 strictPort / `__OG_ORIGIN__` / precompress
+> 全保留。**(2) 动态 OG 分享卡** — 分享链接加 query 镜像(`/?a=…#a=…`,hash 仍正典、旧链接逐字节兼容);
+> `feedback-server.mjs` 可选 `SITE_ROOT` 模式按诗人注入 og/twitter meta(`deploy/og-inject.mjs` 纯函数 + 测试;
+> 不设则一切照旧),nginx 条件反代 + **DEPLOY §6** 运维照抄。**(3) 数据 v3 调研 → NO-GO**(语料源已饱和、唯一
+> 大候选无作者字段;见 DATA_AUDIT.md 补记)。现在 **123 tests** 全绿(+30)。
+>
 > **▶ Status (2026-06-10, 8th agent · round 5 — post-launch P0/P1/P2):** **(1) 别名搜索** — 搜「陶渊明/李太白/
 > 苏东坡」命中本名行;庄子/诸葛亮/三字经 落空时给体面解释 (`src/data/poetAliases.ts` + integrity test)。
 > **(2) 加载兜底** — 修了 loadPoetPoems 把网络失败缓存成"0 首"的真 bug;诗人面板/启动屏都有 错误+重试;
@@ -86,15 +94,16 @@ bundle at `C:\Users\Cohen\Desktop\shiyun-ALL-branches-backup.bundle` (restore: `
 ```bash
 npm install
 npm run dev        # vite → http://localhost:5199 (strictPort)
-npm test           # vitest: 89 tests (47 engine + 6 engineApi + 4 load + 11 GPU-pick + 21 touch-gesture)
+npm test           # vitest: 123 tests (47 engine + 6 engineApi + 4 load + 11 GPU-pick + 21 touch-gesture + 4 alias + 13 permalink + 17 og-inject)
 npm run deploy:build  # build + precompress for a static host (see docs/DEPLOY.md) — Range-safe
 npm run build      # tsc --noEmit && vite build  (the real verify gate)
 npm run typecheck
 ```
 
-Node 24, npm 11. Windows. Stack: Vite + React 18 + TypeScript + @react-three/fiber 8 /
-drei 9 / three 0.169 + zustand 5. **100% static, no backend — never add one** (it's the one
-thing that breaks the hosting model; all index math + render is client-side).
+Node 24, npm 11. Windows. Stack: Vite 8 + React 18 + TypeScript + @react-three/fiber 8 /
+drei 9 / three 0.169 + zustand 5. **100% static + exactly ONE optional backend** —
+`deploy/feedback-server.mjs` (反馈收集 + 可选 OG meta 注入, see DEPLOY §5–6) — **never add another**
+(all index math + render stays client-side; the static build works with the backend absent).
 
 ---
 
