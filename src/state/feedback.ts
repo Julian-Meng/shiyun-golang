@@ -14,6 +14,9 @@ const hanCount = (s: string): number => (s.match(HAN) || []).length;
 
 const ENDPOINT = (import.meta.env.VITE_FEEDBACK_ENDPOINT || "").trim();
 
+/** True when this build ALSO mirrors each submission to the server inbox (VITE_FEEDBACK_ENDPOINT set). */
+export const hasCloudInbox = ENDPOINT !== "";
+
 /** Best-effort upload to the optional server endpoint. Never throws; never blocks the caller. */
 function uploadFeedback(text: string, ts: number): void {
   if (!ENDPOINT) return;

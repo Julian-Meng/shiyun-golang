@@ -1,5 +1,5 @@
 import { useStore } from "../state/store";
-import { getFeedback, clearFeedback, feedbackHanTotal } from "../state/feedback";
+import { getFeedback, clearFeedback, feedbackHanTotal, hasCloudInbox } from "../state/feedback";
 
 // Owner-only feedback inbox — opened by the hidden gesture (5 taps on the 诗云 logo within 10 s, see HUD).
 // Lists every locally-stored feedback message with its timestamp. (localStorage = this device only; see the
@@ -25,7 +25,11 @@ export function FeedbackViewer() {
           <button className="set-close" onClick={() => close(false)} title="关闭">×</button>
         </div>
         {list.length === 0 ? (
-          <div className="fbv-empty">还没有反馈。（仅本机可见 —— 跨设备收集需在部署时接入表单服务）</div>
+          <div className="fbv-empty">
+            {hasCloudInbox
+              ? "本机还没有反馈。（此处仅显示本设备提交的反馈；所有访客的反馈已同步收集到服务器收件箱）"
+              : "还没有反馈。（仅本机可见 —— 跨设备收集需在部署时接入表单服务）"}
+          </div>
         ) : (
           <div className="fbv-list">
             {list.map((f, i) => (
@@ -40,7 +44,7 @@ export function FeedbackViewer() {
           <button
             className="fbv-clear"
             onClick={() => {
-              if (confirm("清空全部本机反馈?此操作不可撤销。")) {
+              if (confirm("清空全部本机反馈？此操作不可撤销。")) {
                 clearFeedback();
                 close(false);
               }

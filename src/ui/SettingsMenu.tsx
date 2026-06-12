@@ -19,7 +19,7 @@ function FeedbackBox() {
     <div className="set-feedback">
       <textarea
         className="set-feedback-input"
-        placeholder="有什么想法、发现的问题或建议?写在这里…"
+        placeholder="有什么想法、发现的问题或建议？写在这里…"
         value={text}
         onChange={(e) => setText(e.target.value)}
         rows={3}
