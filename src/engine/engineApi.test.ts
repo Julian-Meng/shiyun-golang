@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeAll } from "vitest";
 import { setDataset } from "../data/provider";
 import { makeFixtureLexicon } from "./lexicon.fixture";
-import { textBabelIndex, anyTextIndex, pullByIndex, inCharset } from "./engineApi";
+import { textBabelIndex, anyTextIndex, pullByIndex, inCharset, outOfCharset } from "./engineApi";
 
 // The 探诗 (compose/reverse) UI calls these. Since 2026-06-09 the displayed 全集编号 is the UNIVERSAL
 // anyRank over (chars + line-breaks): ONE globally-unique number per poem (a 五绝 and its 自由 twin share
@@ -65,5 +65,12 @@ describe("engineApi — universal 全集编号 (anyRank) ⇄ 反查", () => {
     expect(inCharset(charset[lex.N - 1])).toBe(true);
     expect(inCharset("Z")).toBe(false);
     expect(inCharset("")).toBe(false);
+  });
+
+  it("outOfCharset lists unique 字库外的字 (drives the 自由填诗 hint), code-point + dedup + order", () => {
+    expect(outOfCharset(charset[0] + charset[1])).toEqual([]); // all in 字库
+    expect(outOfCharset("與")).toEqual(["與"]); // 繁体 (U+8207) — not in this Simplified fixture
+    expect(outOfCharset(charset[0] + "與Z與")).toEqual(["與", "Z"]); // dedup + first-seen order, mixes Han + latin
+    expect(outOfCharset("")).toEqual([]);
   });
 });

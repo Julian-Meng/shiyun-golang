@@ -540,6 +540,13 @@ canvas {
 .half-note.dim {
   color: var(--muted);
 }
+/* 自由填诗:输入了字库外的字时的提示(与网格模式的 .cell.bad 同一告警色) */
+.make-bad {
+  font-size: 11px;
+  line-height: 1.5;
+  padding: 6px 14px;
+  color: #ff8a8a;
+}
 .half-idx {
   font-family: ui-monospace, Menlo, monospace;
   font-size: 12px;

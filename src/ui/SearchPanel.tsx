@@ -9,6 +9,7 @@ import {
   pulledFromIndex,
   anyTextIndex,
   inCharset,
+  outOfCharset,
   type HalfIndex,
   type IndexPoem,
   type PullForm,
@@ -94,6 +95,7 @@ export function SearchPanel() {
   const [freeText, setFreeText] = useState(""); // 自由: one line per textarea row
   const [made, setMade] = useState<{ lines: string[]; index: string; digits: number; chars: number } | null>(null);
   const [madeReal, setMadeReal] = useState<RealHit>(null);
+  const [madeBad, setMadeBad] = useState<string[]>([]); // 自由模式输入里不在字库的字(繁体/异体/生僻 → 无编号)
   const [idxInput, setIdxInput] = useState("");
   const [rev, setRev] = useState<IndexPoem | null>(null);
   const [revReal, setRevReal] = useState<RealHit>(null);
@@ -166,10 +168,13 @@ export function SearchPanel() {
   // math by the user — they write a poem, the engine reports its address (+ whether it's a real poem).
   function recomputeMake(form: PullForm, gridT: string, free: string) {
     setMadeReal(null);
+    setMadeBad([]);
     if (form === "ziyou") {
       // split on newlines OR punctuation/space, then keep ONLY 字本身 — so pasting
       // 「床前明月光,疑是地上霜.」 works and every line round-trips through the 字库.
       const lines = free.split(/[\n\r，。；！？、,.;!?\s]+/).map((s) => hanChars(s).join("")).filter(Boolean);
+      // surface any 字库外的字 (繁体/异体/生僻 → 无编号) so the textarea isn't silently blank like the grid's red cells.
+      setMadeBad(outOfCharset(lines.join("")));
       const r = anyTextIndex(lines);
       if (!r) return setMade(null);
       setMade({ lines, index: r.index, digits: r.digits, chars: r.chars });
@@ -408,6 +413,10 @@ export function SearchPanel() {
                         : `这正好是一首真实存在的诗:${madeReal.name}《${madeReal.title}》`}
                     </div>
                   )}
+                </div>
+              ) : composeForm === "ziyou" && madeBad.length > 0 ? (
+                <div className="make-bad" title="诗云字库为简体且已冻结,繁体 / 异体 / 生僻字不在其中">
+                  {madeBad.map((c) => `「${c}」`).join("")}不在字库 —— 诗云用简体,繁体 / 异体 / 生僻字没有编号,换成库内的字即可。
                 </div>
               ) : (
                 <div className="half-note dim">

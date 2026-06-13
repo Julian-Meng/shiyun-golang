@@ -301,6 +301,23 @@ const HAN = /\p{Script=Han}/u;
 export function inCharset(ch: string): boolean {
   return !!ch && charToId().has(ch);
 }
+/**
+ * Unique glyphs in `text` that are NOT in the 字库 — so the text has no fixed 编号. Code-point aware,
+ * de-duplicated, order preserved. Drives the 自由填诗 "which char is unsupported" hint (the grid mode
+ * shows this per-cell via inCharset; the textarea mode uses this). 诗云's 字库 is Simplified + frozen,
+ * so 繁体/异体/生僻字 land here by design.
+ */
+export function outOfCharset(text: string): string[] {
+  const out: string[] = [];
+  const seen = new Set<string>();
+  for (const ch of text) {
+    if (!seen.has(ch) && !inCharset(ch)) {
+      seen.add(ch);
+      out.push(ch);
+    }
+  }
+  return out;
+}
 /** Han chars of `han` → 字库 ids, or null if any char is outside the 字库. */
 function hanToIds(han: string): number[] | null {
   const map = charToId();
