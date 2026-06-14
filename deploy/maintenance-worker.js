@@ -5,7 +5,9 @@ addEventListener("fetch", (event) => event.respondWith(handle(event.request)));
 
 async function handle(request) {
   const url = new URL(request.url);
-  if (url.searchParams.has("__maint_preview")) return maintenance();
+  // preview triggers: ?__maint_preview=1 (query) OR header X-Maint-Preview (header doesn't affect route
+  // path matching, so it lets ops verify which paths actually reach this Worker).
+  if (url.searchParams.has("__maint_preview") || request.headers.get("x-maint-preview")) return maintenance();
   try {
     const resp = await fetch(request);
     if (resp.status >= 500 && resp.status <= 599) return maintenance();
