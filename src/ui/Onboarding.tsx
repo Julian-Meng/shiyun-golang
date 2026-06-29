@@ -3,26 +3,30 @@ import { COARSE } from "../three/detectQuality";
 
 // First-run guide: shown ONCE per browser (localStorage), skippable. Clearing site data shows it
 // again. Purely client-side — no account, no backend.
-const KEY = "shiyun_onboarded_v1";
+// v2 (2026-06): the interaction model changed (触屏默认锁定诗云整体 + 双指缩放;更多里 自由移动 / 随机诗
+// 开关;留影长诗横排/文案开关) → bumped from v1 so users who saw the old guide get the new one once.
+const KEY = "shiyun_onboarded_v2";
 
-// the controls hint adapts to the device: the desktop .hint bar (WASD/拖拽/滚轮) is hidden on mobile, so
-// touch users learn the gesture scheme here instead.
-const CONTROLS = COARSE
-  ? "单指拖动转向、双指拖动飞行、双指捏合缩放调速；轻点星即可选中。"
-  : "WASD 飞行、拖拽转向、滚轮调速；按 H 可隐藏全部界面截图。";
-
+// Platform-specific copy: touch defaults to galaxy-lock (drag = rotate, pinch = zoom); desktop defaults to
+// free-fly (WASD). The guide describes whatever the user actually has.
 const STEPS: { t: string; d: string }[] = [
   {
     t: "诗云 · 一切可能的诗",
-    d: "每位历史诗人是一团真实的星；星与星之间的虚空，是「一切可能的近体诗」——不被储存，点一下就从噪声里把它算出来。",
+    d: "每位诗人是一颗星；它们之间是一切可能的诗——不被储存，点一下才算出来。",
   },
   {
-    t: "点星看真诗 · 点虚空捞诗",
-    d: "点亮的恒星 = 真实诗人，点它读他真写过的诗；点恒星之间的虚空，会从噪声里捞出一首诗，并给出它在「全集目录」里那串长达数十上百位的编号。",
+    t: "怎么逛",
+    d: COARSE
+      ? "单指拖动转视角，双指捏合放大 / 缩小。"
+      : "WASD 飞行，拖动转视角，滚轮调速。",
   },
   {
-    t: "探诗 · 寻诗 · 朝代",
-    d: `「探诗」里逐字填诗或写自由诗，立刻得到它的编号；「寻诗」能按诗句、诗名或单字找出真实的诗。${CONTROLS}`,
+    t: "点星 · 点虚空",
+    d: "点亮的星是真实诗人，点它读真诗；点星之间的虚空，捞出一首诗和它的唯一编号。",
+  },
+  {
+    t: "探诗 · 寻诗 · 留影",
+    d: "写诗得编号、找真实的诗、把一首诗做成分享卡。",
   },
 ];
 

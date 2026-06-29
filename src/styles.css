@@ -385,6 +385,281 @@ canvas {
   color: var(--muted);
 }
 
+/* ── 认领 (claim a void poem → it becomes a meteor) ── */
+.poem-claim {
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid rgba(255, 210, 122, 0.16);
+  text-align: center;
+}
+.claim-btn {
+  background: linear-gradient(180deg, rgba(255, 214, 130, 0.28), rgba(255, 196, 92, 0.14));
+  border: 1px solid rgba(255, 210, 122, 0.6);
+  border-radius: 8px;
+  color: #ffe6b8;
+  font-size: 13px;
+  letter-spacing: 0.08em;
+  padding: 8px 22px;
+  cursor: pointer;
+  transition: background 0.15s, box-shadow 0.15s;
+}
+.claim-btn:hover:not(:disabled) {
+  background: linear-gradient(180deg, rgba(255, 214, 130, 0.4), rgba(255, 196, 92, 0.22));
+  box-shadow: 0 0 16px rgba(255, 200, 110, 0.35);
+}
+.claim-btn:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+.claim-note {
+  margin-top: 9px;
+  font-size: 11px;
+  line-height: 1.65;
+  color: var(--muted);
+}
+.claim-done {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+}
+.claim-seal {
+  display: inline-block;
+  font-size: 11px;
+  letter-spacing: 0.18em;
+  color: #1a1206;
+  background: linear-gradient(180deg, #ffe2a0, #f6c462);
+  border-radius: 5px;
+  padding: 2px 9px;
+  font-weight: 700;
+}
+.claim-no {
+  font-size: 13.5px;
+  line-height: 1.55;
+  color: #ffe6b8;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.02em;
+  text-align: center;
+}
+.claim-id {
+  font-size: 11px;
+  color: var(--gold);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.04em;
+  opacity: 0.85;
+}
+.claim-total {
+  display: block;
+  font-size: 12px;
+  color: var(--gold);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.03em;
+  margin-top: 2px;
+}
+.claim-sub {
+  font-size: 11px;
+  line-height: 1.6;
+  color: var(--muted);
+}
+
+/* 里程碑 / 早期印记 徽记 (PoemPanel claimed state + 我的认领 rows) */
+.claim-badge {
+  display: inline-block;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  padding: 2px 9px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 210, 122, 0.4);
+  color: var(--gold);
+  background: rgba(255, 210, 122, 0.1);
+}
+.claim-badge.founder,
+.claim-badge.milestone {
+  color: #1a1206;
+  background: linear-gradient(180deg, #ffe2a0, #f6c462);
+  border-color: rgba(255, 210, 122, 0.7);
+  font-weight: 600;
+}
+.claim-badge.early {
+  color: #bcd4ff;
+  border-color: rgba(130, 180, 255, 0.4);
+  background: rgba(130, 180, 255, 0.1);
+}
+.claim-badge.mini {
+  font-size: 10px;
+  padding: 1px 7px;
+}
+
+/* 右上角「已有 N 首诗被认领」—— 故意低存在感:小、淡、不抢戏(计数增长不是诗云的目的)。
+   进入时出现 1 分钟,随后 .fading 渐隐消失(组件在淡出后卸载) */
+.claim-counter {
+  position: fixed;
+  top: calc(var(--hud-h, 48px) + 8px);
+  right: 14px;
+  z-index: 12;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+  opacity: 0.5;
+  user-select: none;
+  font-variant-numeric: tabular-nums;
+  transition: opacity 0.35s;
+}
+.claim-counter b {
+  color: var(--gold);
+  font-weight: 600;
+  opacity: 0.9;
+}
+.claim-counter:hover {
+  opacity: 0.85;
+}
+/* 一分钟后渐隐消失:更慢的曲线让它温柔退场,期间不再拦截指针 */
+.claim-counter.fading {
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 1.1s ease;
+}
+
+/* 我的认领 rows — built on the shiyi list, two-line layout */
+.myclaim-item .shiyi-open {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 3px;
+}
+.myclaim-row1 {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+.myclaim-row2 {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.myclaim-no {
+  color: var(--gold);
+  font-variant-numeric: tabular-nums;
+  font-size: 12px;
+  flex: none;
+}
+
+/* 留影 认领分享卡 banner — stamped inside the cinema card when the framed poem is claimed */
+.cinema-claim {
+  margin-top: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  font-size: 13px;
+  color: #ffe6b8;
+  letter-spacing: 0.03em;
+  text-align: center;
+}
+.cinema-claim-seal {
+  font-size: 11px;
+  letter-spacing: 0.16em;
+  color: #1a1206;
+  background: linear-gradient(180deg, #ffe2a0, #f6c462);
+  border-radius: 4px;
+  padding: 1px 7px;
+  font-weight: 700;
+  flex: none;
+}
+
+/* ── 开发者工具(隐藏:5 连点 诗云 logo 打开)── */
+.devtool {
+  position: fixed;
+  top: 56px;
+  left: 16px;
+  z-index: 60;
+  width: min(300px, calc(100vw - 32px));
+  background: rgba(12, 14, 22, 0.96);
+  border: 1px solid rgba(120, 140, 200, 0.3);
+  border-radius: 10px;
+  padding: 10px 12px 12px;
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.55);
+  color: #cdd6ee;
+  font-size: 12px;
+}
+.dev-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  margin-bottom: 6px;
+  color: #e6ecff;
+}
+.dev-group {
+  margin-top: 10px;
+}
+.dev-label {
+  font-size: 11px;
+  color: #8fa0c8;
+  margin-bottom: 6px;
+  letter-spacing: 0.05em;
+}
+.dev-btns {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.dev-btns button {
+  flex: 1 1 auto;
+  background: rgba(120, 150, 230, 0.14);
+  border: 1px solid rgba(130, 160, 230, 0.4);
+  border-radius: 6px;
+  color: #d7e0ff;
+  font-size: 11px;
+  padding: 5px 8px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.dev-btns button:hover {
+  background: rgba(120, 150, 230, 0.26);
+}
+.dev-hint {
+  font-size: 10px;
+  color: #6f7ea6;
+  margin-top: 5px;
+}
+.dev-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 5px 0;
+}
+.dev-row input[type="range"] {
+  flex: 1;
+}
+.dev-k {
+  width: 28px;
+  color: #8fa0c8;
+}
+.dev-v {
+  width: 42px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  color: #d7e0ff;
+}
+.dev-stat {
+  font-size: 11px;
+  color: #aab6d8;
+  margin: 3px 0;
+}
+.dev-link {
+  background: none;
+  border: none;
+  color: #8fb4ff;
+  cursor: pointer;
+  font-size: 11px;
+  padding: 0;
+  text-decoration: underline;
+}
+
 /* HUD additions */
 .stat {
   margin-left: auto;
@@ -1986,18 +2261,142 @@ canvas {
 /* classical 竖排: each line is an upright column; columns flow right→left. NO max-width/height/overflow:
    a long poem renders at FULL length (it may extend past the viewport edges) — the user zooms out with the
    − control + drags to compose, instead of having the left columns clipped/occluded. */
+/* 字体槽:固定 w×h 的框(尺寸由 React inline 给)。slot 本身 NOT overflow:hidden,所以右下角手柄(在 clip
+   之外的直接子级)不会被裁掉;裁剪交给内层 .cinema-clip。 */
+.cinema-slot {
+  position: relative;
+}
+.cinema-slot:hover {
+  /* 悬停才显字体槽边界(截图时鼠标移开即隐);触屏没有 hover,靠常驻手柄找边界。 */
+  outline: 1px dashed rgba(255, 210, 122, 0.32);
+  outline-offset: 6px;
+}
+.cinema-clip {
+  width: 100%;
+  height: 100%;
+  overflow: hidden; /* 诗句溢出时裁掉(自适应字号一般正好填满,极端长诗才会触发) */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+/* 右下角拖拽手柄:始终可见的金色小块(即使背景衬底关掉也找得到),拖动调整字体槽大小,排版随之自适应。 */
+.cinema-resize {
+  position: absolute;
+  right: -10px;
+  bottom: -10px;
+  width: 26px;
+  height: 26px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 7px;
+  background: rgba(20, 18, 12, 0.62);
+  border: 1px solid rgba(255, 210, 122, 0.6);
+  color: var(--gold);
+  font-size: 13px;
+  line-height: 1;
+  cursor: nwse-resize;
+  touch-action: none;
+  z-index: 2;
+  opacity: 0.85;
+}
+.cinema-resize:hover {
+  opacity: 1;
+  background: rgba(255, 210, 122, 0.2);
+}
+/* 竖排:每行 = 一列(字符上→下),列右→左排;列触到字体槽宽度即 flex-wrap 折叠到下一行。颜色由 JS 内联
+   (无极调色,默认暖白);背景衬底默认关,需要时在设置里开。多层暗描边一直在,保证亮场景基本可读。 */
 .cinema-poem {
-  writing-mode: vertical-rl;
-  text-orientation: upright;
+  display: flex;
+  flex-direction: row-reverse; /* 竖排右→左:第一行在最右 */
+  flex-wrap: wrap; /* 触到字体槽宽度 → 折叠到下一行 */
+  justify-content: center;
+  align-items: flex-start;
+  gap: 0.18em 0.4em;
+  max-width: 100%; /* 在字体槽内折行;字号由 useLayoutEffect 二分到填满 */
   font-family: var(--serif);
-  font-size: clamp(19px, 3.6vh, 30px);
+  font-size: 28px; /* 初值,随即被自适应字号覆盖 */
   letter-spacing: 0.18em;
-  color: #f6f2e6;
-  text-shadow: 0 2px 22px rgba(0, 0, 0, 0.95), 0 0 30px rgba(255, 210, 122, 0.15);
+  text-shadow: 0 0 3px rgba(0, 0, 0, 0.95), 0 0 10px rgba(0, 0, 0, 0.85),
+    0 2px 22px rgba(0, 0, 0, 0.95), 0 0 30px rgba(255, 210, 122, 0.14);
+}
+/* 可选暗色衬底(默认关,设置里开) */
+.cinema-poem.with-bg {
+  padding: 16px 20px;
+  border-radius: 16px;
+  background: rgba(8, 10, 18, 0.42);
+  -webkit-backdrop-filter: blur(3px);
+  backdrop-filter: blur(3px);
 }
 .cinema-line {
-  padding: 0 0.4em; /* horizontal gap between the upright columns */
-  white-space: nowrap; /* one line = one column (never wraps into a second column) */
+  writing-mode: vertical-rl;
+  text-orientation: upright;
+  white-space: nowrap; /* 一列字符,列内不换行 */
+}
+/* 左下角统一设置:一个 ⚙ 按钮,点开上方弹出菜单(背景 / 调色 / 文案) */
+.cinema-settings {
+  position: absolute;
+  left: calc(10px + env(safe-area-inset-left));
+  bottom: calc(34px + env(safe-area-inset-bottom));
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  pointer-events: auto;
+}
+.cinema-set-btn {
+  height: 32px;
+  padding: 0 14px;
+  border-radius: 8px;
+  background: rgba(8, 10, 18, 0.55);
+  border: 1px solid rgba(255, 210, 122, 0.4);
+  color: var(--gold);
+  font-size: 13px;
+  letter-spacing: 0.04em;
+  line-height: 1;
+  cursor: pointer;
+}
+.cinema-set-btn:hover,
+.cinema-set-btn.on {
+  background: rgba(255, 210, 122, 0.16);
+}
+.cinema-set-menu {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 172px;
+  padding: 12px 14px;
+  border-radius: 10px;
+  background: rgba(14, 16, 24, 0.92);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 210, 122, 0.28);
+}
+.cinema-set-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 13px;
+  letter-spacing: 0.04em;
+  color: rgba(240, 236, 224, 0.92);
+  white-space: nowrap;
+  cursor: pointer;
+}
+.cinema-set-row input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+  accent-color: var(--gold);
+}
+.cinema-color {
+  width: 40px;
+  height: 26px;
+  padding: 0;
+  border: 1px solid rgba(255, 210, 122, 0.4);
+  border-radius: 6px;
+  background: none;
+  cursor: pointer;
 }
 .cinema-attr {
   margin-top: 12px;

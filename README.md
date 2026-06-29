@@ -43,7 +43,7 @@ cd backend && go mod tidy && cd ..
 ### 2. 准备语料库
 
 ```bash
-git clone https://github.com/Werneror/Poetry.git corpus/Werneror-Poetry
+git clone https://github.com/Cohenjikan/shiyun-corpus.git corpus/shiyun-corpus
 ```
 
 ### 3. 构建数据分片
@@ -200,7 +200,7 @@ docker run -d \
 
 诗云有两个目录：
 
-- **真实诗** — 从开放语料 (Werneror/Poetry) 导入的 85 万首诗人作品。每位诗人化为一个星团，诗句可全文搜索。
+- **真实诗** — 从开放语料 (shiyun-corpus) 导入的 97 万首诗人作品。每位诗人化为一个星团，诗句可全文搜索。
 - **所有可能的诗** — 通过可逆的 rank/unrank 数学映射（灵感来自博尔赫斯《巴别图书馆》和刘慈欣《诗云》）凭空计算生成——给定一个超长编号即可精确生成一首诗，反之亦然。**不存储、仅计算**。
 
 两种诗的编号来自同一套 anyRank 全目录，因此 32,657 位真实诗人的每一首作品在"所有可能诗"的虚空中都有一个唯一的编号坐标。

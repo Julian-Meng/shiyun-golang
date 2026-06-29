@@ -3,14 +3,17 @@ package engine
 import (
 	"math"
 	"math/big"
+	"sync"
 )
 
 // ── App-facing engine API (mirrors engineApi.ts) ──
 
-// BabelCardinality returns N^L for a form.
-func BabelCardinality(form FormDef, N int) *big.Int {
-	return BabelSize(form.L, big.NewInt(int64(N)))
-}
+const (
+	POEM_PULL_K = 3200 // default void-pull alphabet cutoff (Zipf over top-K common chars)
+	ZIPF_S      = 1.15 // Zipf exponent
+	ZIPF_OFFSET = 350  // Zipf offset (flattens head so top chars share weight)
+	FREE_GEN_L  = 30   // max symbols a 自由 void-pull generates
+)
 
 // PulledPoem is the result of a void pull or index lookup.
 type PulledPoem struct {
@@ -21,6 +24,11 @@ type PulledPoem struct {
 	LushiIndex  *string  `json:"lushiIndex,omitempty"`
 	Valid       bool     `json:"valid"`
 	Pos         Vec3     `json:"pos"`
+}
+
+// BabelCardinality returns N^L for a form.
+func BabelCardinality(form FormDef, N int) *big.Int {
+	return BabelSize(form.L, big.NewInt(int64(N)))
 }
 
 // PointForBabelIndex returns the canonical scattered position of a known Babel index.
@@ -56,6 +64,96 @@ func IndexFromPoint(pos Vec3, M *big.Int) *big.Int {
 	}
 	return new(big.Int).Mod(out, M)
 }
+
+// ── Zipf-weighted void pull ──
+
+var zipfCDFMu sync.Mutex
+var zipfCDF = map[int][]float64{}
+
+func buildZipfCDF(K int) []float64 {
+	zipfCDFMu.Lock()
+	defer zipfCDFMu.Unlock()
+	if c, ok := zipfCDF[K]; ok {
+		return c
+	}
+	c := make([]float64, K)
+	var sum float64
+	for i := 0; i < K; i++ {
+		sum += 1.0 / math.Pow(float64(i+ZIPF_OFFSET), ZIPF_S)
+		c[i] = sum
+	}
+	for i := 0; i < K; i++ {
+		c[i] /= sum
+	}
+	zipfCDF[K] = c
+	return c
+}
+
+func pickZipf(cdf []float64, u float64) int {
+	lo, hi := 0, len(cdf)-1
+	for lo < hi {
+		m := (lo + hi) >> 1
+		if u <= cdf[m] {
+			hi = m
+		} else {
+			lo = m + 1
+		}
+	}
+	return lo
+}
+
+// ── mulberry32 PRNG (deterministic, matches TS prng in engineApi.ts) ──
+
+type mulberry32 struct{ a uint32 }
+
+func newMulberry32(seed uint32) *mulberry32 {
+	return &mulberry32{a: seed}
+}
+
+func (m *mulberry32) next() float64 {
+	t := m.a + 0x6d2b79f5
+	m.a = t
+	t2 := uint32(uint64(t^(t>>15)) * uint64(1|t) & 0xffffffff)
+	t3 := uint32(uint64(t2^(t2>>7)) * uint64(61|t2) & 0xffffffff)
+	v := t3 ^ (t3 >> 14)
+	return float64(v) / 4294967296.0
+}
+
+// posSeed derives a uint32 seed from a 3D point, matching TS posSeed.
+func posSeed(pos Vec3, salt uint32) uint32 {
+	bigM := big.NewInt(0x7fffffff)
+	idx := IndexFromPoint(pos, bigM)
+	n := new(big.Int).Mod(idx, bigM)
+	return uint32(n.Int64()) ^ salt
+}
+
+// weightedSyms generates L Zipf-weighted char ids in [0, K), seeded from pos.
+func weightedSyms(pos Vec3, L int, K int) []int {
+	rnd := newMulberry32(posSeed(pos, 0))
+	cdf := buildZipfCDF(K)
+	out := make([]int, L)
+	for i := 0; i < L; i++ {
+		out[i] = pickZipf(cdf, rnd.next())
+	}
+	return out
+}
+
+// weightedFreeSyms generates 词-like variable-length syms with break symbols.
+func weightedFreeSyms(pos Vec3, L int, M int, N int) []int {
+	rnd := newMulberry32(posSeed(pos, 0x9e3779b9))
+	cdf := buildZipfCDF(M)
+	out := make([]int, 0, L)
+	for i := 0; i < L; i++ {
+		if rnd.next() < 1.0/6.0 {
+			out = append(out, N)
+		} else {
+			out = append(out, pickZipf(cdf, rnd.next()))
+		}
+	}
+	return out
+}
+
+// ── describe helpers ──
 
 func toLines(charset []string, form FormDef, chars []int) []string {
 	out := make([]string, form.Lines)
@@ -126,9 +224,11 @@ func describeAny(lx Lexicon, charset []string, syms []int, pos Vec3) PulledPoem 
 	if len(lines) == 0 {
 		lines = []string{""}
 	}
+	// Infer form from line structure — matches upstream describeAny
+	form := InferForm(lines)
 	b := AnyRank(N, syms)
 	return PulledPoem{
-		Form:        "ziyou",
+		Form:        form,
 		Lines:       lines,
 		BabelIndex:  b.String(),
 		BabelDigits: len(b.String()),
@@ -138,27 +238,20 @@ func describeAny(lx Lexicon, charset []string, syms []int, pos Vec3) PulledPoem 
 }
 
 // PullAt generates a poem at the given world point for the given form.
-func PullAt(lx Lexicon, charset []string, formId PullForm, pos Vec3, lushiOnly bool, commonK int) PulledPoem {
+// pullK limits the alphabet to top-K chars (Zipf-weighted). If 0, defaults to POEM_PULL_K.
+func PullAt(lx Lexicon, charset []string, formId PullForm, pos Vec3, lushiOnly bool, pullK int) PulledPoem {
 	R := pos
+	K := pullK
+	if K <= 0 {
+		K = POEM_PULL_K
+	}
 	if formId == "ziyou" {
 		N := lx.N
-		M := N
-		if commonK > 0 && commonK < N {
-			M = commonK
+		M := K
+		if M > N {
+			M = N
 		}
-		W := int(math.Max(1, math.Round(float64(M)/5)))
-		radix := big.NewInt(int64(M + W))
-		k := IndexFromPoint(pos, new(big.Int).Exp(radix, big.NewInt(30), nil))
-		ids := BabelUnrank(30, radix, k)
-		syms := make([]int, len(ids))
-		for i, id := range ids {
-			if id >= M {
-				syms[i] = N
-			} else {
-				syms[i] = id
-			}
-		}
-		return describeAny(lx, charset, syms, R)
+		return describeAny(lx, charset, weightedFreeSyms(pos, FREE_GEN_L, M, N), R)
 	}
 	form := FORMS[formId]
 	if lushiOnly {
@@ -170,13 +263,7 @@ func PullAt(lx Lexicon, charset []string, formId PullForm, pos Vec3, lushiOnly b
 			}
 		}
 	}
-	N := lx.N
-	radix := big.NewInt(int64(N))
-	if commonK > 0 && commonK < N {
-		radix = big.NewInt(int64(commonK))
-	}
-	b := IndexFromPoint(pos, new(big.Int).Exp(radix, big.NewInt(int64(form.L)), nil))
-	return describe(lx, charset, form, BabelUnrank(form.L, radix, b), R)
+	return describe(lx, charset, form, weightedSyms(pos, form.L, K), R)
 }
 
 // PullByIndex decodes a decimal index string back into a poem.

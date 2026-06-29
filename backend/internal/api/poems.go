@@ -104,7 +104,7 @@ func (h *PoemHandler) Pull(w http.ResponseWriter, r *http.Request) {
 		z, _ = strconv.ParseFloat(s, 64)
 	}
 	pos := engine.Vec3{X: x, Y: y, Z: z}
-	p := engine.PullAt(engineDataRef.Lx, engineDataRef.Charset, form, pos, false, 0)
+	p := engine.PullAt(engineDataRef.Lx, engineDataRef.Charset, form, pos, false, loadedPullK)
 	writeJSON(w, 200, p)
 }
 

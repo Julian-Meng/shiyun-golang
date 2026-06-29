@@ -45,7 +45,7 @@ cd backend && go mod tidy && cd ..
 ### 2. Clone the corpus
 
 ```bash
-git clone https://github.com/Werneror/Poetry.git corpus/Werneror-Poetry
+git clone https://github.com/Cohenjikan/shiyun-corpus.git corpus/shiyun-corpus
 ```
 
 ### 3. Build data shards
@@ -202,7 +202,7 @@ Open `http://localhost:8080` in browser.
 
 Poetry Cloud has two catalogs:
 
-- **Real poems** — 850k+ works from the open Werneror/Poetry corpus. Each poet is a star cluster; every line is searchable.
+- **Real poems** — 970k+ works from the shiyun-corpus. Each poet is a star cluster; every line is searchable.
 - **All possible poems** — generated on the fly via a reversible rank/unrank mathematical mapping (inspired by Borges' *Library of Babel* and Liu Cixin's *Poetry Cloud*). Given a number, you get an exact poem; given a poem, you get its number. **Not stored — computed.**
 
 Both catalogs share one address space: every real poem has a unique coordinate in the void of all possible poems.

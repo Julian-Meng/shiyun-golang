@@ -36,6 +36,13 @@ func LoadEngine(db *sql.DB) error {
 		charsStr += c
 	}
 	loadedCharsetHash = fnv1a(charsStr)
+
+	// pullK: count distinct chars in corpus (matches pipeline freq.size). Read from manifest.json
+	// which is the authoritative source written by build-data.mjs.
+	loadedPullK = loadPullKFromManifest()
+	if loadedPullK <= 0 {
+		loadedPullK = 12464 // fallback (last known value)
+	}
 	return nil
 }
 

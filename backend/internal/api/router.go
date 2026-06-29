@@ -2,6 +2,7 @@ package api
 
 import (
 	"database/sql"
+	"fmt"
 	"net/http"
 
 	"shiyun-backend/internal/db"
@@ -28,11 +29,10 @@ func NewRouter(conn *sql.DB) http.Handler {
 		pc, _ := db.PoetCount(conn)
 		pmc, _ := db.PoemCount(conn)
 
-		// Buckets from the original manifest (256 hex buckets)
+		// Buckets from the original manifest (256 hex buckets, "00".."ff")
 		buckets := make([]string, 256)
 		for i := range buckets {
-			buckets[i] = string([]byte{byte(i) >> 4, byte(i) & 0xf})
-			buckets[i] = buckets[i][:2]
+			buckets[i] = fmt.Sprintf("%02x", i)
 		}
 		// Build dynCounts from DB
 		dynCounts := map[string]int{}
@@ -50,6 +50,7 @@ func NewRouter(conn *sql.DB) http.Handler {
 		writeJSON(w, 200, ManifestDTO{
 			Version:     1,
 			N:           n,
+			PullK:       loadedPullK,
 			CharsetHash: loadedCharsetHash,
 			PoetCount:   pc,
 			PoemCount:   pmc,

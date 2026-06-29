@@ -2,8 +2,11 @@ package api
 
 import (
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"net/http"
+	"os"
+	"path/filepath"
 
 	"shiyun-backend/internal/db"
 )
@@ -15,6 +18,35 @@ type CharsetHandler struct {
 
 // loadedCharsetHash is set once LoadEngine is called, used by manifest endpoint.
 var loadedCharsetHash string
+
+// loadedPullK is the number of distinct chars that appear in the corpus (pipeline freq.size).
+var loadedPullK int
+
+// loadPullKFromManifest reads pullK from the generated manifest.json.
+func loadPullKFromManifest() int {
+	// Try a few common paths for manifest.json
+	candidates := []string{
+		filepath.Join("..", "public", "data", "manifest.json"),
+		filepath.Join("public", "data", "manifest.json"),
+		filepath.Join("..", "..", "public", "data", "manifest.json"),
+	}
+	for _, p := range candidates {
+		data, err := os.ReadFile(p)
+		if err != nil {
+			continue
+		}
+		var m struct {
+			PullK int `json:"pullK"`
+		}
+		if err := json.Unmarshal(data, &m); err != nil {
+			continue
+		}
+		if m.PullK > 0 {
+			return m.PullK
+		}
+	}
+	return 0
+}
 
 // GetCharset returns the full ordered 字库 with computed hash.
 func (h *CharsetHandler) GetCharset(w http.ResponseWriter, r *http.Request) {
@@ -35,14 +67,14 @@ func (h *CharsetHandler) GetCharset(w http.ResponseWriter, r *http.Request) {
 
 // fnv1a computes FNV-1a 32-bit hex over each code point (rune).
 // Byte-identical to TS charsetHash.ts: `h ^= charCodeAt(i); h = Math.imul(h, 0x01000193)`.
-// The charset contains only BMP characters (U+0000-U+FFFF), so charCodeAt == code point.
+// Format matches JS `(h>>>0).toString(16)` — no zero-padding.
 func fnv1a(s string) string {
 	var h uint32 = 0x811c9dc5
 	for _, r := range s {
 		h ^= uint32(r)
 		h *= 0x01000193
 	}
-	return fmt.Sprintf("%08x", h)
+	return fmt.Sprintf("%x", h)
 }
 
 // GetLexicon returns the full lexicon (tone + rhyme data).

@@ -4,8 +4,9 @@ import { COARSE, WEAK } from "../three/detectQuality";
 import { submitFeedback } from "../state/feedback";
 import { ShiyiViewer } from "./ShiyiViewer";
 
-// in-page feedback box (collapsed → a single button; expanded → a textarea). Stored locally; the owner
-// reads it via the hidden 5-tap-on-logo gesture (FeedbackViewer). See state/feedback.ts.
+// in-page feedback box (collapsed → a single button; expanded → a textarea). Stored locally + (if
+// VITE_FEEDBACK_ENDPOINT is set) POSTed to the server inbox, which the owner reads via the token GET.
+// See state/feedback.ts. (The 5-tap-on-logo gesture now opens the developer tool, not a feedback viewer.)
 function FeedbackBox() {
   const [open, setOpen] = useState(false);
   const [text, setText] = useState("");
@@ -153,8 +154,16 @@ export function SettingsMenu() {
   const toggleGifts = useStore((s) => s.toggleGifts);
   const gravity = useStore((s) => s.gravity);
   const toggleGravity = useStore((s) => s.toggleGravity);
+  const freeMove = useStore((s) => s.freeMove);
+  const setFreeMove = useStore((s) => s.setFreeMove);
+  const allowRandomPoem = useStore((s) => s.allowRandomPoem);
+  const toggleRandomPoem = useStore((s) => s.toggleRandomPoem);
+  const meteorsOn = useStore((s) => s.meteorsOn);
+  const toggleMeteors = useStore((s) => s.toggleMeteors);
   const shiyiCount = useStore((s) => s.shiyi.length);
   const openShiyi = useStore((s) => s.setShiyiOpen);
+  const myClaimsCount = useStore((s) => s.myClaims.length);
+  const openMyClaims = useStore((s) => s.setMyClaimsOpen);
 
   // DRAGGABLE (item 2): default below the top bar + left of the right-side panels (诗人/诗 panels), so it
   // never traps behind them — drag the header to move it anywhere and watch the effect live.
@@ -183,12 +192,16 @@ export function SettingsMenu() {
   if (!open) return null;
 
   const guideDefault = guideMode === "flash" && guideCoverage === "optimized" && guideSeconds === 10 && guideBrightness === 0.7 && guideStyle === "plane";
-  const allDefault = guideDefault && !showAllPoems && !showGifts && gravity;
+  const freeMoveDefault = !COARSE; // 触屏默认锁定整体,电脑默认自由移动
+  const allDefault = guideDefault && !showAllPoems && !showGifts && gravity && allowRandomPoem && freeMove === freeMoveDefault && meteorsOn;
   const resetAll = () => {
     resetGuide();
     if (showAllPoems) toggleAllPoems();
     if (showGifts) toggleGifts();
     if (!gravity) toggleGravity();
+    if (!allowRandomPoem) toggleRandomPoem();
+    if (freeMove !== freeMoveDefault) setFreeMove(freeMoveDefault);
+    if (!meteorsOn) toggleMeteors();
   };
 
   return (
@@ -287,6 +300,22 @@ export function SettingsMenu() {
           <input type="checkbox" checked={gravity} onChange={toggleGravity} />
           引力 · 摄像机随星系自转,恒星好点选
         </label>
+        <label className="set-toggle">
+          <input type="checkbox" checked={meteorsOn} onChange={toggleMeteors} />
+          流星 · 认领的诗化作流星划过银河（今日认领更耀眼,可点开看诗）
+        </label>
+      </div>
+
+      <div className="set-group">
+        <div className="set-label">漫游 · 交互</div>
+        <label className="set-toggle">
+          <input type="checkbox" checked={freeMove} onChange={() => setFreeMove(!freeMove)} />
+          自由移动 · {COARSE ? "双指飞行漫游" : "WASD 飞行漫游"}（关闭则锁定诗云整体:{COARSE ? "双指缩放 / 单指转角度" : "拖动转角度 / 滚轮缩放"},点诗人或诗歌换锁定目标）
+        </label>
+        <label className="set-toggle">
+          <input type="checkbox" checked={allowRandomPoem} onChange={toggleRandomPoem} />
+          生成随机诗 · 点虚空拉一首随机诗（关闭后点虚空不再生成,只看现存的诗）
+        </label>
       </div>
 
       <button className="set-reset wide" onClick={resetAll} disabled={allDefault}>全部恢复默认</button>
@@ -296,6 +325,14 @@ export function SettingsMenu() {
         <div className="set-label">拾遗</div>
         <button className="set-feedback-open" onClick={() => openShiyi(true)}>
           {shiyiCount > 0 ? `拾遗 — 我捞起的诗 · ${shiyiCount} 首` : "拾遗 — 我捞起的诗"}
+        </button>
+      </div>
+
+      {/* 我的认领 — 我认下的诗 (仅本机的纪念册;全站编号在服务器永久) */}
+      <div className="set-group">
+        <div className="set-label">我的认领</div>
+        <button className="set-feedback-open" onClick={() => openMyClaims(true)}>
+          {myClaimsCount > 0 ? `我的认领 — 我认下的诗 · ${myClaimsCount} 首` : "我的认领 — 我认下的诗"}
         </button>
       </div>
 

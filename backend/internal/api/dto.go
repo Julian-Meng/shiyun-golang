@@ -21,6 +21,7 @@ type GiftTuple struct {
 type ManifestDTO struct {
 	Version     int            `json:"version"`
 	N           int            `json:"n"`
+	PullK       int            `json:"pullK"`
 	CharsetHash string         `json:"charsetHash"`
 	PoetCount   int            `json:"poetCount"`
 	PoemCount   int            `json:"poemCount"`
